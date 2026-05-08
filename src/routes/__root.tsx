@@ -80,6 +80,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Travel Dashboard" },
+      { name: "twitter:description", content: "Personal flights & hotel tracker." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/02ddd6fb-3fc3-45ee-9d63-1a618f414004" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/02ddd6fb-3fc3-45ee-9d63-1a618f414004" },
     ],
     links: [
       {
