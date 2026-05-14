@@ -1,15 +1,46 @@
 import type { Flight } from "@/lib/dashboard-api";
-import { Plane, ExternalLink } from "lucide-react";
+import { Plane, ExternalLink, Ticket } from "lucide-react";
 import { formatTime } from "@/lib/date-utils";
+
+// Look up a value from the optional `fields` map by trying multiple key
+// variants (case/space/underscore-insensitive).
+function pickField(flight: Flight, ...keys: string[]): string | undefined {
+  const f = flight.fields;
+  if (!f) return undefined;
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+  const map = new Map<string, string>();
+  Object.entries(f).forEach(([k, v]) => map.set(norm(k), String(v ?? "")));
+  for (const k of keys) {
+    const v = map.get(norm(k));
+    if (v && v.trim()) return v.trim();
+  }
+  return undefined;
+}
 
 export function FlightCard({ flight }: { flight: Flight }) {
   const status = (flight.bookingStatus || "").toUpperCase();
+  const flightNumber = pickField(flight, "flightNumber", "flight_no", "flight no", "flight");
+  const gate = pickField(flight, "gate", "boardingGate", "boarding gate");
+  const terminal = pickField(flight, "terminal");
+  const boardingPass = pickField(
+    flight,
+    "boardingPass",
+    "boarding_pass",
+    "boarding pass",
+    "boardingPassUrl",
+    "boardingPassLink",
+  );
   return (
     <div className="rounded-2xl bg-card p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-accent">
           <Plane className="h-4 w-4" />
-          <span>{flight.airline || "Flight"}</span>
+          <span>
+            {flight.airline || "Flight"}
+            {flightNumber && (
+              <span className="ml-1 font-mono text-muted-foreground">· {flightNumber}</span>
+            )}
+          </span>
         </div>
         <StatusBadge status={status} />
       </div>
@@ -42,21 +73,48 @@ export function FlightCard({ flight }: { flight: Flight }) {
         </div>
       </div>
 
-      {(flight.confirmationCode || flight.manageLink) && (
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs">
+      {(gate || terminal) && (
+        <div className="mt-3 flex gap-2 text-[11px]">
+          {terminal && (
+            <span className="rounded-md bg-accent-soft px-2 py-1 font-semibold text-accent">
+              Terminal {terminal}
+            </span>
+          )}
+          {gate && (
+            <span className="rounded-md bg-accent-soft px-2 py-1 font-semibold text-accent">
+              Gate {gate}
+            </span>
+          )}
+        </div>
+      )}
+
+      {(flight.confirmationCode || flight.manageLink || boardingPass) && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs">
           <span className="font-mono text-muted-foreground">
             {flight.confirmationCode ? `PNR ${flight.confirmationCode}` : "No PNR"}
           </span>
-          {flight.manageLink && (
-            <a
-              href={flight.manageLink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
-            >
-              Manage <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
+          <div className="flex items-center gap-3">
+            {boardingPass && (
+              <a
+                href={boardingPass}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+              >
+                <Ticket className="h-3 w-3" /> Boarding Pass
+              </a>
+            )}
+            {flight.manageLink && (
+              <a
+                href={flight.manageLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+              >
+                Manage <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
         </div>
       )}
     </div>
