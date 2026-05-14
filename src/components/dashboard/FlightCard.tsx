@@ -35,7 +35,12 @@ export function FlightCard({ flight }: { flight: Flight }) {
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-accent">
           <Plane className="h-4 w-4" />
-          <span>{flight.airline || "Flight"}</span>
+          <span>
+            {flight.airline || "Flight"}
+            {flightNumber && (
+              <span className="ml-1 font-mono text-muted-foreground">· {flightNumber}</span>
+            )}
+          </span>
         </div>
         <StatusBadge status={status} />
       </div>
