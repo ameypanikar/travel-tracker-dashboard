@@ -1,9 +1,35 @@
 import type { Flight } from "@/lib/dashboard-api";
-import { Plane, ExternalLink } from "lucide-react";
+import { Plane, ExternalLink, Ticket } from "lucide-react";
 import { formatTime } from "@/lib/date-utils";
+
+// Look up a value from the optional `fields` map by trying multiple key
+// variants (case/space/underscore-insensitive).
+function pickField(flight: Flight, ...keys: string[]): string | undefined {
+  const f = flight.fields;
+  if (!f) return undefined;
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+  const map = new Map<string, string>();
+  Object.entries(f).forEach(([k, v]) => map.set(norm(k), String(v ?? "")));
+  for (const k of keys) {
+    const v = map.get(norm(k));
+    if (v && v.trim()) return v.trim();
+  }
+  return undefined;
+}
 
 export function FlightCard({ flight }: { flight: Flight }) {
   const status = (flight.bookingStatus || "").toUpperCase();
+  const flightNumber = pickField(flight, "flightNumber", "flight_no", "flight no", "flight");
+  const gate = pickField(flight, "gate", "boardingGate", "boarding gate");
+  const terminal = pickField(flight, "terminal");
+  const boardingPass = pickField(
+    flight,
+    "boardingPass",
+    "boarding_pass",
+    "boarding pass",
+    "boardingPassUrl",
+    "boardingPassLink",
+  );
   return (
     <div className="rounded-2xl bg-card p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
