@@ -73,21 +73,48 @@ export function FlightCard({ flight }: { flight: Flight }) {
         </div>
       </div>
 
-      {(flight.confirmationCode || flight.manageLink) && (
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs">
+      {(gate || terminal) && (
+        <div className="mt-3 flex gap-2 text-[11px]">
+          {terminal && (
+            <span className="rounded-md bg-accent-soft px-2 py-1 font-semibold text-accent">
+              Terminal {terminal}
+            </span>
+          )}
+          {gate && (
+            <span className="rounded-md bg-accent-soft px-2 py-1 font-semibold text-accent">
+              Gate {gate}
+            </span>
+          )}
+        </div>
+      )}
+
+      {(flight.confirmationCode || flight.manageLink || boardingPass) && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs">
           <span className="font-mono text-muted-foreground">
             {flight.confirmationCode ? `PNR ${flight.confirmationCode}` : "No PNR"}
           </span>
-          {flight.manageLink && (
-            <a
-              href={flight.manageLink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
-            >
-              Manage <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
+          <div className="flex items-center gap-3">
+            {boardingPass && (
+              <a
+                href={boardingPass}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+              >
+                <Ticket className="h-3 w-3" /> Boarding Pass
+              </a>
+            )}
+            {flight.manageLink && (
+              <a
+                href={flight.manageLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+              >
+                Manage <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
         </div>
       )}
     </div>
