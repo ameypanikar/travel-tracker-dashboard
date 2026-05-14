@@ -4,10 +4,11 @@ import { useMemo, useState } from "react";
 import { fetchDashboard } from "@/lib/dashboard-api";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { Tabs, type TabKey } from "@/components/dashboard/Tabs";
-import { DayView } from "@/components/dashboard/DayView";
+import { DailyItinerary } from "@/components/dashboard/DailyItinerary";
 import { PendingList } from "@/components/dashboard/PendingList";
 import { FlightsList } from "@/components/dashboard/FlightsList";
 import { HotelsList } from "@/components/dashboard/HotelsList";
+import { UberTab } from "@/components/dashboard/UberTab";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -57,11 +58,21 @@ function Index() {
         {data && !isLoading && (
           <>
             {tab === "day" && (
-              <DayView flights={data.flights} hotels={data.hotels} />
+              <DailyItinerary flights={data.flights} hotels={data.hotels} />
             )}
             {tab === "pending" && <PendingList items={data.pending} />}
             {tab === "flights" && <FlightsList flights={data.flights} />}
             {tab === "hotels" && <HotelsList hotels={data.hotels} />}
+            {tab === "uber" && (
+              <UberTab
+                suggestions={data.hotels
+                  .filter((h) => h.address || h.hotelName)
+                  .map((h) => ({
+                    label: h.hotelName || "Hotel",
+                    address: h.address || h.hotelName,
+                  }))}
+              />
+            )}
           </>
         )}
 
