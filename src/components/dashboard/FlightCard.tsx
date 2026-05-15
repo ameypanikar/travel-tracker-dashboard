@@ -30,6 +30,9 @@ export function FlightCard({ flight }: { flight: Flight }) {
     "boardingPassUrl",
     "boardingPassLink",
   );
+  const manageLink =
+    flight.manageLink ||
+    pickField(flight, "manageLink", "manage_link", "manage link", "Manage LINK", "manage", "manageUrl");
   return (
     <div className="rounded-2xl bg-card p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
