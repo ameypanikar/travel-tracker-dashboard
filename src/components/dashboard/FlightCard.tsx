@@ -30,6 +30,9 @@ export function FlightCard({ flight }: { flight: Flight }) {
     "boardingPassUrl",
     "boardingPassLink",
   );
+  const manageLink =
+    flight.manageLink ||
+    pickField(flight, "manageLink", "manage_link", "manage link", "Manage LINK", "manage", "manageUrl");
   return (
     <div className="rounded-2xl bg-card p-4 shadow-card">
       <div className="mb-3 flex items-center justify-between">
@@ -88,7 +91,7 @@ export function FlightCard({ flight }: { flight: Flight }) {
         </div>
       )}
 
-      {(flight.confirmationCode || flight.manageLink || boardingPass) && (
+      {(flight.confirmationCode || manageLink || boardingPass) && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs">
           <span className="font-mono text-muted-foreground">
             {flight.confirmationCode ? `PNR ${flight.confirmationCode}` : "No PNR"}
@@ -104,9 +107,9 @@ export function FlightCard({ flight }: { flight: Flight }) {
                 <Ticket className="h-3 w-3" /> Boarding Pass
               </a>
             )}
-            {flight.manageLink && (
+            {manageLink && (
               <a
-                href={flight.manageLink}
+                href={manageLink}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"

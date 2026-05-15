@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { fetchDashboard } from "@/lib/dashboard-api";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { Tabs, type TabKey } from "@/components/dashboard/Tabs";
+import { DateFilterBar } from "@/components/dashboard/DateFilterBar";
 import { DailyItinerary } from "@/components/dashboard/DailyItinerary";
-import { PendingList } from "@/components/dashboard/PendingList";
 import { FlightsList } from "@/components/dashboard/FlightsList";
 import { HotelsList } from "@/components/dashboard/HotelsList";
 import { UberTab } from "@/components/dashboard/UberTab";
@@ -16,14 +16,13 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [tab, setTab] = useState<TabKey>("day");
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["dashboard"],
     queryFn: fetchDashboard,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
-
-  const pendingCount = useMemo(() => data?.pending?.length ?? 0, [data]);
 
   return (
     <div className="min-h-screen bg-dashboard-bg text-foreground">
@@ -34,7 +33,11 @@ function Index() {
           updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt) : null}
         />
 
-        <Tabs value={tab} onChange={setTab} pendingCount={pendingCount} />
+        <Tabs value={tab} onChange={setTab} />
+
+        {tab !== "uber" && (
+          <DateFilterBar value={selectedDate} onChange={setSelectedDate} />
+        )}
 
         {isLoading && (
           <div className="rounded-2xl bg-card p-8 text-center text-sm text-muted-foreground shadow-card">
@@ -57,12 +60,20 @@ function Index() {
 
         {data && !isLoading && (
           <>
-            {tab === "day" && (
-              <DailyItinerary flights={data.flights} hotels={data.hotels} />
+            {tab === "flights" && (
+              <FlightsList flights={data.flights} selectedDate={selectedDate} />
             )}
-            {tab === "pending" && <PendingList items={data.pending} />}
-            {tab === "flights" && <FlightsList flights={data.flights} />}
-            {tab === "hotels" && <HotelsList hotels={data.hotels} />}
+            {tab === "hotels" && (
+              <HotelsList hotels={data.hotels} selectedDate={selectedDate} />
+            )}
+            {tab === "day" && (
+              <DailyItinerary
+                flights={data.flights}
+                hotels={data.hotels}
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
+            )}
             {tab === "uber" && (
               <UberTab
                 suggestions={data.hotels
