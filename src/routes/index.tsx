@@ -9,6 +9,8 @@ import { DailyItinerary } from "@/components/dashboard/DailyItinerary";
 import { FlightsList } from "@/components/dashboard/FlightsList";
 import { HotelsList } from "@/components/dashboard/HotelsList";
 import { UberTab } from "@/components/dashboard/UberTab";
+import { MonthlyView } from "@/components/dashboard/MonthlyView";
+import { LocalEats } from "@/components/dashboard/LocalEats";
 
 export const Route = createFileRoute("/")({
   component: Index,
