@@ -37,7 +37,7 @@ function Index() {
 
         <Tabs value={tab} onChange={setTab} />
 
-        {tab !== "uber" && (
+        {(tab === "flights" || tab === "hotels" || tab === "day") && (
           <DateFilterBar value={selectedDate} onChange={setSelectedDate} />
         )}
 
