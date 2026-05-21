@@ -76,6 +76,9 @@ function Index() {
                 onDateChange={setSelectedDate}
               />
             )}
+            {tab === "monthly" && (
+              <MonthlyView flights={data.flights} hotels={data.hotels} />
+            )}
             {tab === "uber" && (
               <UberTab
                 suggestions={data.hotels
@@ -84,6 +87,11 @@ function Index() {
                     label: h.hotelName || "Hotel",
                     address: h.address || h.hotelName,
                   }))}
+              />
+            )}
+            {tab === "eats" && (
+              <LocalEats
+                defaultLocation={data.hotels[0]?.city || data.hotels[0]?.address || ""}
               />
             )}
           </>
