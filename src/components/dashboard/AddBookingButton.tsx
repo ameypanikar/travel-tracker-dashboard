@@ -43,11 +43,17 @@ function getApiKey(): string {
   return localStorage.getItem("gemini_api_key") || "";
 }
 
-async function callGemini(apiKey: string, system: string, text: string): Promise<Record<string, string>> {
+async function callGeminiPdf(apiKey: string, system: string, pdfBase64: string): Promise<Record<string, string>> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
-    systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: "user", parts: [{ text }] }],
+    contents: [
+      {
+        parts: [
+          { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
+          { text: system },
+        ],
+      },
+    ],
     generationConfig: { responseMimeType: "application/json", temperature: 0 },
   };
   const res = await fetch(url, {
@@ -62,13 +68,25 @@ async function callGemini(apiKey: string, system: string, text: string): Promise
   const json = await res.json();
   const txt: string | undefined = json?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!txt) throw new Error("Empty Gemini response");
-  // Strip code fences if present
   const cleaned = txt.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch {
     throw new Error("Could not parse JSON from Gemini response");
   }
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function appendRow(kind: Mode, fields: Record<string, string>): Promise<void> {
