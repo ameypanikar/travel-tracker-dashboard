@@ -263,31 +263,49 @@ export function AddBookingButton() {
                 })}
               </div>
 
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={`Paste your ${mode} confirmation text here...`}
-                rows={7}
-                className="w-full resize-none rounded-md border border-input bg-background p-3 text-sm"
-              />
-
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  onClick={extract}
-                  disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
-                >
-                  {busy && !extracted ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                  Extract & Preview
-                </button>
-                <button
-                  onClick={reset}
-                  disabled={busy}
-                  className="rounded-md border border-input bg-background px-3 py-1.5 text-xs font-semibold"
-                >
-                  Clear
-                </button>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => inputRef.current?.click()}
+                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition ${
+                  dragOver ? "border-accent bg-accent-soft/50" : "border-border bg-muted/30 hover:bg-muted/50"
+                }`}
+              >
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                />
+                {busy ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin text-accent" />
+                    <p className="text-sm font-semibold">Reading your PDF…</p>
+                    {fileName && <p className="text-xs text-muted-foreground">{fileName}</p>}
+                  </>
+                ) : fileName && extracted ? (
+                  <>
+                    <FileText className="h-6 w-6 text-accent" />
+                    <p className="text-sm font-semibold">{fileName}</p>
+                    <p className="text-xs text-muted-foreground">Click or drop another PDF to replace</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                    <p className="text-sm font-semibold">Drop your booking PDF here or click to browse</p>
+                    <p className="text-xs text-muted-foreground">We'll extract the {mode} details automatically</p>
+                  </>
+                )}
               </div>
+
 
               {extracted && (
                 <div className="mt-4 overflow-hidden rounded-lg border border-border">
