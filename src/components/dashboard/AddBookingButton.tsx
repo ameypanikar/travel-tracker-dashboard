@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Settings, X, Plane, Hotel, Loader2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Plus, Settings, X, Plane, Hotel, Loader2, Upload, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { WEB_APP_URL } from "@/lib/dashboard-api";
 
@@ -43,11 +43,17 @@ function getApiKey(): string {
   return localStorage.getItem("gemini_api_key") || "";
 }
 
-async function callGemini(apiKey: string, system: string, text: string): Promise<Record<string, string>> {
+async function callGeminiPdf(apiKey: string, system: string, pdfBase64: string): Promise<Record<string, string>> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
-    systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: "user", parts: [{ text }] }],
+    contents: [
+      {
+        parts: [
+          { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
+          { text: system },
+        ],
+      },
+    ],
     generationConfig: { responseMimeType: "application/json", temperature: 0 },
   };
   const res = await fetch(url, {
@@ -62,13 +68,25 @@ async function callGemini(apiKey: string, system: string, text: string): Promise
   const json = await res.json();
   const txt: string | undefined = json?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!txt) throw new Error("Empty Gemini response");
-  // Strip code fences if present
   const cleaned = txt.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch {
     throw new Error("Could not parse JSON from Gemini response");
   }
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function appendRow(kind: Mode, fields: Record<string, string>): Promise<void> {
@@ -83,17 +101,20 @@ async function appendRow(kind: Mode, fields: Record<string, string>): Promise<vo
 export function AddBookingButton() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("flight");
-  const [text, setText] = useState("");
+  const [fileName, setFileName] = useState<string>("");
   const [extracted, setExtracted] = useState<Record<string, string> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(getApiKey());
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const fields = mode === "flight" ? FLIGHT_FIELDS : HOTEL_FIELDS;
 
   const reset = () => {
-    setText("");
+    setFileName("");
     setExtracted(null);
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   const saveKey = () => {
@@ -102,21 +123,24 @@ export function AddBookingButton() {
     setShowSettings(false);
   };
 
-  const extract = async () => {
+  const handleFile = async (file: File) => {
     const key = getApiKey();
     if (!key) {
       toast.error("Add your Gemini API key in settings first");
       setShowSettings(true);
       return;
     }
-    if (!text.trim()) {
-      toast.error("Paste your booking confirmation text");
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Please upload a PDF file");
       return;
     }
+    setFileName(file.name);
+    setExtracted(null);
     setBusy(true);
     try {
+      const base64 = await fileToBase64(file);
       const sys = mode === "flight" ? FLIGHT_PROMPT : HOTEL_PROMPT;
-      const data = await callGemini(key, sys, text);
+      const data = await callGeminiPdf(key, sys, base64);
       const normalized: Record<string, string> = {};
       for (const f of fields) normalized[f.key] = String(data[f.key] ?? "");
       setExtracted(normalized);
@@ -126,6 +150,13 @@ export function AddBookingButton() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
   };
 
   const save = async () => {
@@ -232,31 +263,49 @@ export function AddBookingButton() {
                 })}
               </div>
 
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={`Paste your ${mode} confirmation text here...`}
-                rows={7}
-                className="w-full resize-none rounded-md border border-input bg-background p-3 text-sm"
-              />
-
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  onClick={extract}
-                  disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
-                >
-                  {busy && !extracted ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                  Extract & Preview
-                </button>
-                <button
-                  onClick={reset}
-                  disabled={busy}
-                  className="rounded-md border border-input bg-background px-3 py-1.5 text-xs font-semibold"
-                >
-                  Clear
-                </button>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => inputRef.current?.click()}
+                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition ${
+                  dragOver ? "border-accent bg-accent-soft/50" : "border-border bg-muted/30 hover:bg-muted/50"
+                }`}
+              >
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                />
+                {busy ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin text-accent" />
+                    <p className="text-sm font-semibold">Reading your PDF…</p>
+                    {fileName && <p className="text-xs text-muted-foreground">{fileName}</p>}
+                  </>
+                ) : fileName && extracted ? (
+                  <>
+                    <FileText className="h-6 w-6 text-accent" />
+                    <p className="text-sm font-semibold">{fileName}</p>
+                    <p className="text-xs text-muted-foreground">Click or drop another PDF to replace</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                    <p className="text-sm font-semibold">Drop your booking PDF here or click to browse</p>
+                    <p className="text-xs text-muted-foreground">We'll extract the {mode} details automatically</p>
+                  </>
+                )}
               </div>
+
 
               {extracted && (
                 <div className="mt-4 overflow-hidden rounded-lg border border-border">
