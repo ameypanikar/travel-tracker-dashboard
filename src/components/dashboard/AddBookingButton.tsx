@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Settings, X, Plane, Hotel, Loader2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Plus, Settings, X, Plane, Hotel, Loader2, Upload, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { WEB_APP_URL } from "@/lib/dashboard-api";
 
