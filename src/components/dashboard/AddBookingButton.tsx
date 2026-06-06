@@ -101,17 +101,20 @@ async function appendRow(kind: Mode, fields: Record<string, string>): Promise<vo
 export function AddBookingButton() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("flight");
-  const [text, setText] = useState("");
+  const [fileName, setFileName] = useState<string>("");
   const [extracted, setExtracted] = useState<Record<string, string> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(getApiKey());
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const fields = mode === "flight" ? FLIGHT_FIELDS : HOTEL_FIELDS;
 
   const reset = () => {
-    setText("");
+    setFileName("");
     setExtracted(null);
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   const saveKey = () => {
@@ -120,21 +123,24 @@ export function AddBookingButton() {
     setShowSettings(false);
   };
 
-  const extract = async () => {
+  const handleFile = async (file: File) => {
     const key = getApiKey();
     if (!key) {
       toast.error("Add your Gemini API key in settings first");
       setShowSettings(true);
       return;
     }
-    if (!text.trim()) {
-      toast.error("Paste your booking confirmation text");
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Please upload a PDF file");
       return;
     }
+    setFileName(file.name);
+    setExtracted(null);
     setBusy(true);
     try {
+      const base64 = await fileToBase64(file);
       const sys = mode === "flight" ? FLIGHT_PROMPT : HOTEL_PROMPT;
-      const data = await callGemini(key, sys, text);
+      const data = await callGeminiPdf(key, sys, base64);
       const normalized: Record<string, string> = {};
       for (const f of fields) normalized[f.key] = String(data[f.key] ?? "");
       setExtracted(normalized);
@@ -144,6 +150,13 @@ export function AddBookingButton() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
   };
 
   const save = async () => {
