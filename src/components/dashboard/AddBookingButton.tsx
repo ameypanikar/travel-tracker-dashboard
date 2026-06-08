@@ -83,7 +83,7 @@ export function AddBookingButton() {
             contents: [
               {
                 parts: [
-                  { inline_data: { mime_type: "application/pdf", data: base64 } },
+                  { inline_data: { mime_type: mimeType, data: base64 } },
                   { text: prompt },
                 ],
               },
@@ -126,11 +126,16 @@ export function AddBookingButton() {
       setError("Please click ⚙️ settings to enter your Gemini API key first");
       return;
     }
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    let mimeType = "application/pdf";
+    if (ext === "jpg" || ext === "jpeg") mimeType = "image/jpeg";
+    else if (ext === "png") mimeType = "image/png";
+    else if (ext === "webp") mimeType = "image/webp";
     setLoading(true);
     setStatus("Reading PDF... please wait");
     try {
       const base64 = await fileToBase64(file);
-      const data = await extractWithGemini(base64, kind);
+      const data = await extractWithGemini(base64, kind, mimeType);
       const keys = kind === "flight" ? FLIGHT_KEYS : HOTEL_KEYS;
       const normalized: Record<string, string> = {};
       for (const k of keys) normalized[k] = String(data[k] ?? "");
@@ -236,11 +241,11 @@ export function AddBookingButton() {
               )}
             >
               <Upload className="h-5 w-5 text-muted-foreground" />
-              <div className="font-medium">Drop your booking PDF here or click to browse</div>
+              <div className="font-medium">Drop your booking PDF or image here or click to browse</div>
               <input
                 ref={inputRef}
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
                 className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
               />
