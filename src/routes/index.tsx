@@ -11,6 +11,7 @@ import { HotelsList } from "@/components/dashboard/HotelsList";
 import { UberTab } from "@/components/dashboard/UberTab";
 import { MonthlyView } from "@/components/dashboard/MonthlyView";
 import { LocalEats } from "@/components/dashboard/LocalEats";
+import { AddBookingButton } from "@/components/dashboard/AddBookingButton";
 
 export const Route = createFileRoute("/")({
   component: Index,
