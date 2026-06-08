@@ -67,7 +67,7 @@ export function AddBookingButton() {
     localStorage.setItem("gemini_api_key", val);
   };
 
-  const extractWithGemini = async (base64: string, k: Kind): Promise<Record<string, string>> => {
+  const extractWithGemini = async (base64: string, k: Kind, mimeType: string): Promise<Record<string, string>> => {
     const key = localStorage.getItem("gemini_api_key");
     if (!key) throw new Error("Please click ⚙️ settings to enter your Gemini API key first");
     const prompt = k === "flight" ? FLIGHT_PROMPT : HOTEL_PROMPT;
