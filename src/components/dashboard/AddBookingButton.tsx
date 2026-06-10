@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 type Kind = "flight" | "hotel";
 
 const SHEET_URL =
-  "https://script.google.com/macros/s/AKfycbz9vzVzHH6sPpcxaTj7ISrQLEGQ7y59wRsBcVbFdRl1KyNVz7GAFfXd9VycYNKhLG25wg/exec";
+  "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec";
 
 const FLIGHT_PROMPT =
   "Extract flight booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: airline, from_code (airport code), city_from, to_code (airport code), city_to, departure_date (DD/MM/YYYY), departure_time (HH:MM 24hr), arrival_date (DD/MM/YYYY), arrival_time (HH:MM 24hr), confirmation_code, duration (HH:MM), manage_link. Use empty string for missing fields.";

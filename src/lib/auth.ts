@@ -1,5 +1,5 @@
 export const USERS_URL =
-  "https://script.google.com/macros/s/AKfycbz9vzVzHH6sPpcxaTj7ISrQLEGQ7y59wRsBcVbFdRl1KyNVz7GAFfXd9VycYNKhLG25wg/exec?action=getUsers";
+  "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec?action=getUsers";
 
 export type SessionUser = { name: string; username: string; role: string };
 type StoredUser = SessionUser & { password: string };

@@ -1,5 +1,5 @@
 export const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbypRpF7oVmlJWo6afODnsOoJPWcHbqTshtwxyVyrK7S2V6zUWIyNa9vhIHhYCjpEhy19Q/exec";
+  "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec";
 
 export type Flight = {
   type: "flight";
