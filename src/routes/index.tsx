@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchDashboard } from "@/lib/dashboard-api";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { Tabs, type TabKey } from "@/components/dashboard/Tabs";
@@ -12,20 +12,39 @@ import { UberTab } from "@/components/dashboard/UberTab";
 import { MonthlyView } from "@/components/dashboard/MonthlyView";
 import { LocalEats } from "@/components/dashboard/LocalEats";
 import { AddBookingButton } from "@/components/dashboard/AddBookingButton";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { clearSessionUser, getSessionUser, type SessionUser } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
 function Index() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [tab, setTab] = useState<TabKey>("day");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setUser(getSessionUser());
+    setAuthReady(true);
+  }, []);
+
   const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["dashboard"],
     queryFn: fetchDashboard,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!user,
   });
+
+  if (!authReady) return null;
+  if (!user) return <LoginPage onLogin={setUser} />;
+
+  const handleLogout = () => {
+    clearSessionUser();
+    setUser(null);
+  };
 
   return (
     <div className="min-h-screen bg-dashboard-bg text-foreground">
@@ -34,6 +53,8 @@ function Index() {
           onRefresh={() => refetch()}
           isFetching={isFetching}
           updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt) : null}
+          user={user}
+          onLogout={handleLogout}
         />
 
         <Tabs value={tab} onChange={setTab} />
