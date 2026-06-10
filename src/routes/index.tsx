@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchDashboard } from "@/lib/dashboard-api";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { Tabs, type TabKey } from "@/components/dashboard/Tabs";
@@ -12,6 +12,8 @@ import { UberTab } from "@/components/dashboard/UberTab";
 import { MonthlyView } from "@/components/dashboard/MonthlyView";
 import { LocalEats } from "@/components/dashboard/LocalEats";
 import { AddBookingButton } from "@/components/dashboard/AddBookingButton";
+import { LoginPage } from "@/components/auth/LoginPage";
+import { clearSessionUser, getSessionUser, type SessionUser } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   component: Index,
