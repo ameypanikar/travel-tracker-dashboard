@@ -1,15 +1,15 @@
 import type { Hotel } from "@/lib/dashboard-api";
-import { Hotel as HotelIcon, ExternalLink, MapPin, Phone } from "lucide-react";
+import { Hotel as HotelIcon, ExternalLink, MapPin } from "lucide-react";
 
 export function HotelCard({ hotel }: { hotel: Hotel }) {
-  const status = (hotel.bookingStatus || "").toUpperCase();
-  const address = hotel.address || hotel.fields?.address || "";
+  const h = hotel as unknown as Record<string, string>;
+  const status = (h.bookingstatus || "").toUpperCase();
   return (
     <div className="rounded-2xl bg-card p-4 shadow-card">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-accent">
           <HotelIcon className="h-4 w-4" />
-          <span>{hotel.hotelName || "Hotel"}</span>
+          <span>{h.hotelname || "Hotel"}</span>
         </div>
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
@@ -24,10 +24,10 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
         </span>
       </div>
 
-      {address && (
+      {h.city && (
         <div className="mb-3 flex items-start gap-1.5 text-xs text-muted-foreground">
           <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
-          <span>{address}</span>
+          <span>{h.city}</span>
         </div>
       )}
 
@@ -36,37 +36,32 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Check-in
           </div>
-          <div className="mt-0.5 text-sm font-semibold">{hotel.checkInDate || "—"}</div>
+          <div className="mt-0.5 text-sm font-semibold">{h.checkindate || "—"}</div>
         </div>
         <div className="text-right">
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Check-out
           </div>
-          <div className="mt-0.5 text-sm font-semibold">{hotel.checkOutDate || "—"}</div>
+          <div className="mt-0.5 text-sm font-semibold">{h.checkoutdate || "—"}</div>
         </div>
       </div>
 
-      {(hotel.confirmationCode || hotel.bookingLink || hotel.mapsLink || hotel.phone) && (
+      {(h.confirmationcode || h.bookedprice || h.googlemapslink) && (
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-xs">
-          {hotel.confirmationCode && (
-            <span className="font-mono text-muted-foreground">{hotel.confirmationCode}</span>
+          {h.confirmationcode && (
+            <span className="font-mono text-muted-foreground">{h.confirmationcode}</span>
           )}
-          {hotel.bookingLink && (
-            <a href={hotel.bookingLink} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline">
-              Booking <ExternalLink className="h-3 w-3" />
-            </a>
+          {h.bookedprice && (
+            <span className="font-semibold">{h.bookedprice}</span>
           )}
-          {hotel.mapsLink && (
-            <a href={hotel.mapsLink} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline">
-              Map <MapPin className="h-3 w-3" />
-            </a>
-          )}
-          {hotel.phone && (
-            <a href={`tel:${hotel.phone}`}
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline">
-              <Phone className="h-3 w-3" /> {hotel.phone}
+          {h.googlemapslink && (
+            <a
+              href={h.googlemapslink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+            >
+              Map <ExternalLink className="h-3 w-3" />
             </a>
           )}
         </div>
