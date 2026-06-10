@@ -39,17 +39,39 @@ export async function login(
   const res = await fetch(USERS_URL, { redirect: "follow" });
   if (!res.ok) throw new Error("Could not reach login service");
   const json = (await res.json()) as { ok?: boolean; users?: StoredUser[] } | StoredUser[];
-  const users: StoredUser[] = Array.isArray(json)
-    ? json
-    : (json.users ?? []);
+  const users: StoredUser[] = Array.isArray(json) ? json : (json.users ?? []);
+
+  const enteredUser = username.trim();
+  const enteredUserLower = enteredUser.toLowerCase();
+  console.log("[auth] login attempt", {
+    username: enteredUser,
+    password,
+    usersFetched: users.length,
+    knownUsernames: users.map((u) => u.username),
+  });
 
   const hashed = await sha256Hex(password);
-  const u = users.find(
+
+  // 1) plain-text + case-insensitive username
+  let u = users.find(
     (x) =>
-      x.username?.toLowerCase() === username.toLowerCase() &&
-      (x.password === password || x.password === hashed),
+      (x.username ?? "").toLowerCase() === enteredUserLower &&
+      x.password === password,
   );
-  if (!u) throw new Error("Invalid username or password");
+
+  // 2) SHA-256 hashed password fallback
+  if (!u) {
+    u = users.find(
+      (x) =>
+        (x.username ?? "").toLowerCase() === enteredUserLower &&
+        x.password === hashed,
+    );
+  }
+
+  if (!u) {
+    console.warn("[auth] no match for", enteredUser);
+    throw new Error("Invalid username or password");
+  }
   const session: SessionUser = { name: u.name, username: u.username, role: u.role };
   setSessionUser(session);
   return session;
