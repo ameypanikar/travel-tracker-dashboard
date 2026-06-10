@@ -45,12 +45,6 @@ function Index() {
     clearSessionUser();
     setUser(null);
   };
-  const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: fetchDashboard,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
 
   return (
     <div className="min-h-screen bg-dashboard-bg text-foreground">
@@ -59,6 +53,8 @@ function Index() {
           onRefresh={() => refetch()}
           isFetching={isFetching}
           updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt) : null}
+          user={user}
+          onLogout={handleLogout}
         />
 
         <Tabs value={tab} onChange={setTab} />
