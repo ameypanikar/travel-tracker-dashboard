@@ -32,7 +32,7 @@ export function FlightsList({
   return (
     <div className="flex flex-col gap-3">
       {filtered.map((f) => (
-        <FlightCard key={`${f.sourceSheet}-${f.sourceRow}`} flight={f} />
+        <FlightCard key={(f as unknown as Record<string, string>).confirmationcode} flight={f} />
       ))}
     </div>
   );

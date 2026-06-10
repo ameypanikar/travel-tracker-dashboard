@@ -9,13 +9,14 @@ export function PendingList({ items }: { items: PendingItem[] }) {
   }
   return (
     <div className="flex flex-col gap-3">
-      {items.map((it) =>
-        it.type === "flight" ? (
-          <FlightCard key={`${it.sourceSheet}-${it.sourceRow}`} flight={it} />
+      {items.map((it) => {
+        const code = (it as unknown as Record<string, string>).confirmationcode;
+        return it.type === "flight" ? (
+          <FlightCard key={code} flight={it} />
         ) : it.type === "hotel" ? (
-          <HotelCard key={`${it.sourceSheet}-${it.sourceRow}`} hotel={it} />
-        ) : null
-      )}
+          <HotelCard key={code} hotel={it} />
+        ) : null;
+      })}
     </div>
   );
 }

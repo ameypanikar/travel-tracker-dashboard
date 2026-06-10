@@ -37,7 +37,7 @@ export function HotelsList({
   return (
     <div className="flex flex-col gap-3">
       {filtered.map((h) => (
-        <HotelCard key={`${h.sourceSheet}-${h.sourceRow}`} hotel={h} />
+        <HotelCard key={(h as unknown as Record<string, string>).confirmationcode} hotel={h} />
       ))}
     </div>
   );
