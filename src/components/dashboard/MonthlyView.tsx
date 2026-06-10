@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Flight, Hotel } from "@/lib/dashboard-api";
-import { parseAnyDate, isSameDay, startOfDay, isWithinRange, formatTime, formatDayLabel } from "@/lib/date-utils";
+import { parseAnyDate, isSameDay, startOfDay, formatTime, formatDayLabel } from "@/lib/date-utils";
 import { ChevronLeft, ChevronRight, Plane, Bed } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -12,12 +12,12 @@ type Props = {
 
 type DayEvents = {
   flights: Flight[];
-  checkIns: Hotel[];
-  checkOuts: Hotel[];
-  stays: Hotel[];
+  hotels: Hotel[];
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const isoOf = (x: unknown): string | undefined => (x as Record<string, string>)?.isoDate;
 
 export function MonthlyView({ flights, hotels }: Props) {
   const today = startOfDay(new Date());
@@ -42,24 +42,18 @@ export function MonthlyView({ flights, hotels }: Props) {
 
   const eventsByDay = (day: Date): DayEvents => {
     const fl = flights.filter((f) => {
-      const d = parseAnyDate(f.departureIso || f.departureDate);
+      const d = parseAnyDate(isoOf(f));
       return d && isSameDay(d, day);
     });
-    const checkIns: Hotel[] = [];
-    const checkOuts: Hotel[] = [];
-    const stays: Hotel[] = [];
-    for (const h of hotels) {
-      const ci = parseAnyDate(h.checkInIso || h.checkInDate);
-      const co = parseAnyDate(h.checkOutIso || h.checkOutDate);
-      if (ci && isSameDay(ci, day)) checkIns.push(h);
-      else if (co && isSameDay(co, day)) checkOuts.push(h);
-      else if (ci && co && isWithinRange(day, ci, co)) stays.push(h);
-    }
-    return { flights: fl, checkIns, checkOuts, stays };
+    const ht = hotels.filter((h) => {
+      const d = parseAnyDate(isoOf(h));
+      return d && isSameDay(d, day);
+    });
+    return { flights: fl, hotels: ht };
   };
 
   const openEvents = openDay ? eventsByDay(openDay) : null;
-  const hasAny = (e: DayEvents) => e.flights.length + e.checkIns.length + e.checkOuts.length + e.stays.length > 0;
+  const hasAny = (e: DayEvents) => e.flights.length + e.hotels.length > 0;
 
   return (
     <div className="rounded-2xl bg-card p-3 shadow-card sm:p-4">
@@ -108,17 +102,13 @@ export function MonthlyView({ flights, hotels }: Props) {
               <div className={cn("text-[11px] font-semibold", isToday && "text-accent")}>
                 {d.getDate()}
               </div>
-              <div className="mt-auto flex flex-wrap gap-0.5">
-                {ev.flights.slice(0, 2).map((_, idx) => (
-                  <span key={`f${idx}`} className="inline-flex h-4 items-center gap-0.5 rounded bg-sky-500/15 px-1 text-[9px] text-sky-700 dark:text-sky-300">
-                    <Plane className="h-2.5 w-2.5" />
-                  </span>
-                ))}
-                {[...ev.checkIns, ...ev.checkOuts, ...ev.stays].slice(0, 2).map((_, idx) => (
-                  <span key={`h${idx}`} className="inline-flex h-4 items-center gap-0.5 rounded bg-emerald-500/15 px-1 text-[9px] text-emerald-700 dark:text-emerald-300">
-                    <Bed className="h-2.5 w-2.5" />
-                  </span>
-                ))}
+              <div className="mt-auto flex items-center gap-1">
+                {ev.flights.length > 0 && (
+                  <span className="h-2 w-2 rounded-full bg-sky-500" aria-label="flight" />
+                )}
+                {ev.hotels.length > 0 && (
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" aria-label="hotel" />
+                )}
               </div>
             </button>
           );
@@ -132,52 +122,44 @@ export function MonthlyView({ flights, hotels }: Props) {
           </DialogHeader>
           {openEvents && (
             <div className="space-y-3">
-              {openEvents.flights.map((f, i) => (
-                <div key={`f${i}`} className="rounded-lg border p-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-sky-600">
-                    <Plane className="h-3.5 w-3.5" /> Flight {f.airline}
+              {openEvents.flights.map((flight) => {
+                const f = flight as unknown as Record<string, string>;
+                return (
+                  <div key={f.confirmationcode || `${f.from}-${f.to}-${f.departuretime}`} className="rounded-lg border p-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-sky-600">
+                      <Plane className="h-3.5 w-3.5" /> Flight {f.airline}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {f.from} → {f.to}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatTime(f.departuretime)} — {formatTime(f.arrivaltime)}
+                    </div>
+                    {f.confirmationcode && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">Conf: {f.confirmationcode}</div>
+                    )}
                   </div>
-                  <div className="mt-1 text-sm font-semibold">
-                    {f.fromCode} → {f.toCode}
+                );
+              })}
+              {openEvents.hotels.map((hotel) => {
+                const h = hotel as unknown as Record<string, string>;
+                return (
+                  <div key={h.confirmationcode || h.hotelname} className="rounded-lg border p-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-600">
+                      <Bed className="h-3.5 w-3.5" /> Hotel
+                    </div>
+                    <div className="mt-1 text-sm font-semibold">{h.hotelname}</div>
+                    {h.city && <div className="text-xs text-muted-foreground">{h.city}</div>}
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {h.checkindate} → {h.checkoutdate}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatTime(f.departureTime)} — {formatTime(f.arrivalTime)}
-                  </div>
-                  {f.confirmationCode && (
-                    <div className="mt-1 text-[11px] text-muted-foreground">Conf: {f.confirmationCode}</div>
-                  )}
-                </div>
-              ))}
-              {openEvents.checkIns.map((h, i) => (
-                <HotelRow key={`ci${i}`} hotel={h} label="Check-in" />
-              ))}
-              {openEvents.checkOuts.map((h, i) => (
-                <HotelRow key={`co${i}`} hotel={h} label="Check-out" />
-              ))}
-              {openEvents.stays.map((h, i) => (
-                <HotelRow key={`st${i}`} hotel={h} label="Staying" />
-              ))}
+                );
+              })}
             </div>
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function HotelRow({ hotel, label }: { hotel: Hotel; label: string }) {
-  return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-center gap-2 text-xs font-bold text-emerald-600">
-        <Bed className="h-3.5 w-3.5" /> {label}
-      </div>
-      <div className="mt-1 text-sm font-semibold">{hotel.hotelName}</div>
-      {hotel.address && (
-        <div className="text-xs text-muted-foreground">{hotel.address}</div>
-      )}
-      <div className="mt-1 text-[11px] text-muted-foreground">
-        {hotel.checkInDate} → {hotel.checkOutDate}
-      </div>
     </div>
   );
 }
