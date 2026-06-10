@@ -20,8 +20,31 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [tab, setTab] = useState<TabKey>("day");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setUser(getSessionUser());
+    setAuthReady(true);
+  }, []);
+
+  const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: fetchDashboard,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!user,
+  });
+
+  if (!authReady) return null;
+  if (!user) return <LoginPage onLogin={setUser} />;
+
+  const handleLogout = () => {
+    clearSessionUser();
+    setUser(null);
+  };
   const { data, isLoading, isFetching, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["dashboard"],
     queryFn: fetchDashboard,
