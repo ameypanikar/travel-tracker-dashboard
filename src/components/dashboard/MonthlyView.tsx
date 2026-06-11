@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Flight, Hotel } from "@/lib/dashboard-api";
 import { parseAnyDate, isSameDay, startOfDay, formatTime, formatDayLabel } from "@/lib/date-utils";
-import { ChevronLeft, ChevronRight, Plane, Bed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plane, Hotel as HotelIcon, Bed } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +25,7 @@ const toISO = (ddmmyyyy?: string): string => {
 };
 
 const flightIso = (f: unknown): string => toISO((f as Record<string, string>)?.departuredate);
-const hotelIso = (h: unknown): string => toISO((h as Record<string, string>)?.checkindate);
+
 
 export function MonthlyView({ flights, hotels }: Props) {
   const today = startOfDay(new Date());
@@ -54,8 +54,13 @@ export function MonthlyView({ flights, hotels }: Props) {
       return d && isSameDay(d, day);
     });
     const ht = hotels.filter((h) => {
-      const d = parseAnyDate(hotelIso(h));
-      return d && isSameDay(d, day);
+      const startIso = toISO((h as unknown as Record<string, string>)?.checkindate);
+      const endIso = toISO((h as unknown as Record<string, string>)?.checkoutdate);
+      const start = parseAnyDate(startIso);
+      const end = parseAnyDate(endIso) ?? start;
+      if (!start) return false;
+      const t = startOfDay(day).getTime();
+      return t >= startOfDay(start).getTime() && t <= startOfDay(end!).getTime();
     });
     return { flights: fl, hotels: ht };
   };
@@ -110,12 +115,12 @@ export function MonthlyView({ flights, hotels }: Props) {
               <div className={cn("text-[11px] font-semibold", isToday && "text-accent")}>
                 {d.getDate()}
               </div>
-              <div className="mt-auto flex items-center gap-0.5 text-sm leading-none">
+              <div className="mt-auto flex items-center gap-1 text-accent">
                 {ev.flights.length > 0 && (
-                  <span aria-label="flight">✈️</span>
+                  <Plane className="h-4 w-4" aria-label="flight" />
                 )}
                 {ev.hotels.length > 0 && (
-                  <span aria-label="hotel">🏨</span>
+                  <HotelIcon className="h-4 w-4" aria-label="hotel" />
                 )}
               </div>
             </button>
