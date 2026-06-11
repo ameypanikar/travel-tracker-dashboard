@@ -25,7 +25,7 @@ const toISO = (ddmmyyyy?: string): string => {
 };
 
 const flightIso = (f: unknown): string => toISO((f as Record<string, string>)?.departuredate);
-const hotelIso = (h: unknown): string => toISO((h as Record<string, string>)?.checkindate);
+
 
 export function MonthlyView({ flights, hotels }: Props) {
   const today = startOfDay(new Date());
