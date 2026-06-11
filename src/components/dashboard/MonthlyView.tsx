@@ -54,8 +54,13 @@ export function MonthlyView({ flights, hotels }: Props) {
       return d && isSameDay(d, day);
     });
     const ht = hotels.filter((h) => {
-      const d = parseAnyDate(hotelIso(h));
-      return d && isSameDay(d, day);
+      const startIso = toISO((h as unknown as Record<string, string>)?.checkindate);
+      const endIso = toISO((h as unknown as Record<string, string>)?.checkoutdate);
+      const start = parseAnyDate(startIso);
+      const end = parseAnyDate(endIso) ?? start;
+      if (!start) return false;
+      const t = startOfDay(day).getTime();
+      return t >= startOfDay(start).getTime() && t <= startOfDay(end!).getTime();
     });
     return { flights: fl, hotels: ht };
   };
