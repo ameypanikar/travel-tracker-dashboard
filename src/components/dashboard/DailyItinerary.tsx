@@ -1,17 +1,10 @@
 import { useMemo, useState } from "react";
 import type { Flight, Hotel } from "@/lib/dashboard-api";
-import {
-  parseAnyDate,
-  startOfDay,
-  isSameDay,
-  addDays,
-  formatDayLabel,
-  formatTime,
-} from "@/lib/date-utils";
+import { startOfDay, isSameDay, addDays, formatDayLabel } from "@/lib/date-utils";
 import { FlightCard } from "./FlightCard";
 import { HotelCard } from "./HotelCard";
 import { EmptyState } from "./EmptyState";
-import { Calendar as CalendarIcon, Plane, Bed } from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -23,14 +16,14 @@ type Props = {
   onDateChange: (d: Date | null) => void;
 };
 
-type TimelineItem =
-  | { kind: "flight"; time: number; label: string; flight: Flight }
-  | {
-      kind: "hotel-checkin" | "hotel-checkout" | "hotel-stay";
-      time: number;
-      label: string;
-      hotel: Hotel;
-    };
+const pad = (n: number) => String(n).padStart(2, "0");
+const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toISO = (ddmmyyyy?: string): string => {
+  if (!ddmmyyyy) return "";
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length !== 3) return "";
+  return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+};
 
 export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: Props) {
   const today = startOfDay(new Date());
@@ -40,53 +33,20 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
   const stripStart = addDays(selected, -3);
   const strip = Array.from({ length: 14 }, (_, i) => addDays(stripStart, i));
 
-  const items: TimelineItem[] = useMemo(() => {
-    const out: TimelineItem[] = [];
-    flights.forEach((f) => {
-      const d = parseAnyDate(f.departureIso || f.departureDate);
-      if (d && isSameDay(d, selected)) {
-        out.push({
-          kind: "flight",
-          time: d.getTime(),
-          label: formatTime(f.departureTime) || "Flight",
-          flight: f,
-        });
-      }
+  const { matchedFlights, matchedHotels } = useMemo(() => {
+    const ymd = toYMD(selected);
+    const mf = flights.filter((f) => (f as unknown as Record<string, string>).isoDate === ymd);
+    const mh = hotels.filter((h) => {
+      const r = h as unknown as Record<string, string>;
+      const start = toISO(r.checkindate);
+      const end = toISO(r.checkoutdate) || start;
+      if (!start) return false;
+      return ymd >= start && ymd <= end;
     });
-    hotels.forEach((h) => {
-      const ci = parseAnyDate(h.checkInIso || h.checkInDate);
-      const co = parseAnyDate(h.checkOutIso || h.checkOutDate);
-      if (!ci) return;
-      const end = co ?? ci;
-      if (isSameDay(ci, selected)) {
-        out.push({
-          kind: "hotel-checkin",
-          time: startOfDay(selected).getTime() + 14 * 60 * 60 * 1000,
-          label: "Check-in",
-          hotel: h,
-        });
-      } else if (co && isSameDay(co, selected)) {
-        out.push({
-          kind: "hotel-checkout",
-          time: startOfDay(selected).getTime() + 11 * 60 * 60 * 1000,
-          label: "Check-out",
-          hotel: h,
-        });
-      } else if (
-        startOfDay(selected).getTime() > startOfDay(ci).getTime() &&
-        startOfDay(selected).getTime() < startOfDay(end).getTime()
-      ) {
-        out.push({
-          kind: "hotel-stay",
-          time: startOfDay(selected).getTime(),
-          label: "Staying at",
-          hotel: h,
-        });
-      }
-    });
-    return out.sort((a, b) => a.time - b.time);
+    return { matchedFlights: mf, matchedHotels: mh };
   }, [flights, hotels, selected]);
 
+  const total = matchedFlights.length + matchedHotels.length;
   const setDate = (d: Date) => onDateChange(startOfDay(d));
 
   return (
@@ -96,7 +56,7 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
           <div>
             <div className="text-base font-bold text-foreground">{formatDayLabel(selected)}</div>
             <div className="text-[11px] text-muted-foreground">
-              {items.length} event{items.length === 1 ? "" : "s"} today
+              {total} event{total === 1 ? "" : "s"} today
             </div>
           </div>
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
@@ -171,33 +131,26 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           title="Nothing on this day"
           message="No flights or hotel stays scheduled."
         />
       ) : (
-        <ol className="relative ml-3 border-l-2 border-dashed border-accent-soft pl-5">
-          {items.map((it, i) => (
-            <li key={i} className="relative mb-4 last:mb-0">
-              <span className="absolute -left-[34px] top-2 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-card">
-                {it.kind === "flight" ? (
-                  <Plane className="h-3.5 w-3.5" />
-                ) : (
-                  <Bed className="h-3.5 w-3.5" />
-                )}
-              </span>
-              <div className="mb-1.5 flex items-baseline gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                <span>{it.label}</span>
-              </div>
-              {it.kind === "flight" ? (
-                <FlightCard flight={it.flight} />
-              ) : (
-                <HotelCard hotel={it.hotel} />
-              )}
-            </li>
+        <div className="flex flex-col gap-3">
+          {matchedFlights.map((f) => (
+            <FlightCard
+              key={(f as unknown as Record<string, string>).confirmationcode}
+              flight={f}
+            />
           ))}
-        </ol>
+          {matchedHotels.map((h) => (
+            <HotelCard
+              key={(h as unknown as Record<string, string>).confirmationcode}
+              hotel={h}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
