@@ -115,12 +115,12 @@ export function MonthlyView({ flights, hotels }: Props) {
               <div className={cn("text-[11px] font-semibold", isToday && "text-accent")}>
                 {d.getDate()}
               </div>
-              <div className="mt-auto flex items-center gap-0.5 text-sm leading-none">
+              <div className="mt-auto flex items-center gap-1 text-accent">
                 {ev.flights.length > 0 && (
-                  <span aria-label="flight">✈️</span>
+                  <Plane className="h-4 w-4" aria-label="flight" />
                 )}
                 {ev.hotels.length > 0 && (
-                  <span aria-label="hotel">🏨</span>
+                  <HotelIcon className="h-4 w-4" aria-label="hotel" />
                 )}
               </div>
             </button>
