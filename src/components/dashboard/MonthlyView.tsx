@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Flight, Hotel } from "@/lib/dashboard-api";
 import { parseAnyDate, isSameDay, startOfDay, formatTime, formatDayLabel } from "@/lib/date-utils";
-import { ChevronLeft, ChevronRight, Plane, Bed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plane, Hotel as HotelIcon, Bed } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
