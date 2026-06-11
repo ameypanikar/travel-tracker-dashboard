@@ -1,7 +1,15 @@
 import type { Hotel } from "@/lib/dashboard-api";
 import { HotelCard } from "./HotelCard";
 import { EmptyState } from "./EmptyState";
-import { parseAnyDate, startOfDay } from "@/lib/date-utils";
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toISO = (ddmmyyyy?: string): string => {
+  if (!ddmmyyyy) return "";
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length !== 3) return "";
+  return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+};
 
 export function HotelsList({
   hotels,
@@ -12,13 +20,12 @@ export function HotelsList({
 }) {
   const filtered = selectedDate
     ? hotels.filter((h) => {
-        const ci = parseAnyDate(h.checkInIso || h.checkInDate);
-        const co = parseAnyDate(h.checkOutIso || h.checkOutDate);
-        if (!ci) return false;
-        const t = startOfDay(selectedDate).getTime();
-        const start = startOfDay(ci).getTime();
-        const end = startOfDay(co ?? ci).getTime();
-        return t >= start && t <= end;
+        const r = h as unknown as Record<string, string>;
+        const start = toISO(r.checkindate);
+        const end = toISO(r.checkoutdate) || start;
+        if (!start) return false;
+        const ymd = toYMD(selectedDate);
+        return ymd >= start && ymd <= end;
       })
     : hotels;
 

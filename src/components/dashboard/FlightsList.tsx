@@ -1,7 +1,15 @@
 import type { Flight } from "@/lib/dashboard-api";
 import { FlightCard } from "./FlightCard";
 import { EmptyState } from "./EmptyState";
-import { isSameDay, parseAnyDate } from "@/lib/date-utils";
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toISO = (ddmmyyyy?: string): string => {
+  if (!ddmmyyyy) return "";
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length !== 3) return "";
+  return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+};
 
 export function FlightsList({
   flights,
@@ -12,8 +20,8 @@ export function FlightsList({
 }) {
   const filtered = selectedDate
     ? flights.filter((f) => {
-        const d = parseAnyDate(f.departureIso || f.departureDate);
-        return d ? isSameDay(d, selectedDate) : false;
+        const r = f as unknown as Record<string, string>;
+        return toISO(r.departuredate) === toYMD(selectedDate);
       })
     : flights;
 
