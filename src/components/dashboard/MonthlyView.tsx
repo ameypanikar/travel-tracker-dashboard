@@ -17,7 +17,15 @@ type DayEvents = {
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const isoOf = (x: unknown): string | undefined => (x as Record<string, string>)?.isoDate;
+const toISO = (ddmmyyyy?: string): string => {
+  if (!ddmmyyyy) return "";
+  const parts = String(ddmmyyyy).split("/");
+  if (parts.length !== 3) return "";
+  return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+};
+
+const flightIso = (f: unknown): string => toISO((f as Record<string, string>)?.departuredate);
+const hotelIso = (h: unknown): string => toISO((h as Record<string, string>)?.checkindate);
 
 export function MonthlyView({ flights, hotels }: Props) {
   const today = startOfDay(new Date());
@@ -42,11 +50,11 @@ export function MonthlyView({ flights, hotels }: Props) {
 
   const eventsByDay = (day: Date): DayEvents => {
     const fl = flights.filter((f) => {
-      const d = parseAnyDate(isoOf(f));
+      const d = parseAnyDate(flightIso(f));
       return d && isSameDay(d, day);
     });
     const ht = hotels.filter((h) => {
-      const d = parseAnyDate(isoOf(h));
+      const d = parseAnyDate(hotelIso(h));
       return d && isSameDay(d, day);
     });
     return { flights: fl, hotels: ht };
