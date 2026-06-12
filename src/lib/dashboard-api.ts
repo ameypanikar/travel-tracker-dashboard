@@ -46,12 +46,15 @@ export type Hotel = {
   fields?: Record<string, string>;
 };
 
+export type Train = Record<string, string>;
+
 export type PendingItem = (Flight | Hotel) & { isPending: true };
 
 export type DashboardData = {
   ok: boolean;
   flights: Flight[];
   hotels: Hotel[];
+  trains: Train[];
   pending: PendingItem[];
   updatedAt: string;
   error?: string;
@@ -68,6 +71,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     ...json,
     flights: json.flights ?? [],
     hotels: json.hotels ?? [],
+    trains: json.trains ?? [],
     pending: json.pending ?? [],
   };
 }
