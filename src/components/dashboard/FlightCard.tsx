@@ -39,23 +39,29 @@ export function FlightCard({ flight }: { flight: Flight }) {
         </div>
       </div>
 
-      {(f.confirmationcode || f.managelink) && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs">
-          <span className="font-mono text-muted-foreground">
-            {f.confirmationcode ? `PNR ${f.confirmationcode}` : "No PNR"}
-          </span>
-          {f.managelink && (
-            <a
-              href={f.managelink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
-            >
-              Manage <ExternalLink className="h-3 w-3" />
-            </a>
+      {(f.confirmationcode || f.managelink || f.assignedto) && (
+        <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-mono text-muted-foreground">
+              {f.confirmationcode ? `PNR ${f.confirmationcode}` : "No PNR"}
+            </span>
+            {f.managelink && (
+              <a
+                href={f.managelink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+              >
+                Manage <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+          {f.assignedto && (
+            <div className="text-[11px] text-muted-foreground">👤 {f.assignedto}</div>
           )}
         </div>
       )}
+
     </div>
   );
 }
