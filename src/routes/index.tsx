@@ -8,6 +8,7 @@ import { DateFilterBar } from "@/components/dashboard/DateFilterBar";
 import { DailyItinerary } from "@/components/dashboard/DailyItinerary";
 import { FlightsList } from "@/components/dashboard/FlightsList";
 import { HotelsList } from "@/components/dashboard/HotelsList";
+import { TrainsList } from "@/components/dashboard/TrainsList";
 import { UberTab } from "@/components/dashboard/UberTab";
 import { MonthlyView } from "@/components/dashboard/MonthlyView";
 import { LocalEats } from "@/components/dashboard/LocalEats";
@@ -59,7 +60,7 @@ function Index() {
 
         <Tabs value={tab} onChange={setTab} />
 
-        {(tab === "flights" || tab === "hotels" || tab === "day") && (
+        {(tab === "flights" || tab === "hotels" || tab === "trains" || tab === "day") && (
           <DateFilterBar value={selectedDate} onChange={setSelectedDate} />
         )}
 
@@ -89,6 +90,9 @@ function Index() {
             )}
             {tab === "hotels" && (
               <HotelsList hotels={data.hotels} selectedDate={selectedDate} />
+            )}
+            {tab === "trains" && (
+              <TrainsList trains={(data.trains ?? []) as unknown as Record<string, string>[]} selectedDate={selectedDate} />
             )}
             {tab === "day" && (
               <DailyItinerary
