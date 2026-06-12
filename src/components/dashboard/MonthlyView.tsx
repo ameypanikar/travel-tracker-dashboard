@@ -4,6 +4,8 @@ import { parseAnyDate, isSameDay, startOfDay, formatTime, formatDayLabel } from 
 import { ChevronLeft, ChevronRight, Plane, Hotel as HotelIcon, Bed } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { filterByRole } from "@/lib/role-filter";
+
 
 type Props = {
   flights: Flight[];
@@ -27,8 +29,11 @@ const toISO = (ddmmyyyy?: string): string => {
 const flightIso = (f: unknown): string => toISO((f as Record<string, string>)?.departuredate);
 
 
-export function MonthlyView({ flights, hotels }: Props) {
+export function MonthlyView({ flights: rawFlights, hotels: rawHotels }: Props) {
+  const flights = filterByRole(rawFlights as unknown as Record<string, unknown>[]) as unknown as Flight[];
+  const hotels = filterByRole(rawHotels as unknown as Record<string, unknown>[]) as unknown as Hotel[];
   const today = startOfDay(new Date());
+
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [openDay, setOpenDay] = useState<Date | null>(null);
 
@@ -151,9 +156,13 @@ export function MonthlyView({ flights, hotels }: Props) {
                     {f.confirmationcode && (
                       <div className="mt-1 text-[11px] text-muted-foreground">Conf: {f.confirmationcode}</div>
                     )}
+                    {f.assignedto && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">👤 Assigned: {f.assignedto}</div>
+                    )}
                   </div>
                 );
               })}
+
               {openEvents.hotels.map((hotel) => {
                 const h = hotel as unknown as Record<string, string>;
                 return (
@@ -166,7 +175,11 @@ export function MonthlyView({ flights, hotels }: Props) {
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {h.checkindate} → {h.checkoutdate}
                     </div>
+                    {h.assignedto && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">👤 Assigned: {h.assignedto}</div>
+                    )}
                   </div>
+
                 );
               })}
             </div>

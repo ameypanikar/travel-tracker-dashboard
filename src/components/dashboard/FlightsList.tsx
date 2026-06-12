@@ -1,6 +1,8 @@
 import type { Flight } from "@/lib/dashboard-api";
 import { FlightCard } from "./FlightCard";
 import { EmptyState } from "./EmptyState";
+import { filterByRole } from "@/lib/role-filter";
+
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -18,12 +20,14 @@ export function FlightsList({
   flights: Flight[];
   selectedDate?: Date | null;
 }) {
+  const visible = filterByRole(flights as unknown as Record<string, unknown>[]) as unknown as Flight[];
   const filtered = selectedDate
-    ? flights.filter((f) => {
+    ? visible.filter((f) => {
         const r = f as unknown as Record<string, string>;
         return toISO(r.departuredate) === toYMD(selectedDate);
       })
-    : flights;
+    : visible;
+
 
   if (!filtered.length) {
     return (

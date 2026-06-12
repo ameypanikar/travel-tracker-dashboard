@@ -46,26 +46,30 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
         </div>
       </div>
 
-      {(h.confirmationcode || h.bookedprice || h.googlemapslink) && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-xs">
-          {h.confirmationcode && (
-            <span className="font-mono text-muted-foreground">{h.confirmationcode}</span>
-          )}
-          {h.bookedprice && (
-            <span className="font-semibold">{h.bookedprice}</span>
-          )}
-          {h.googlemapslink && (
-            <a
-              href={h.googlemapslink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
-            >
-              Map <ExternalLink className="h-3 w-3" />
-            </a>
+      {(h.confirmationcode || h.bookedprice || h.googlemapslink || h.assignedto) && (
+        <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3">
+            {h.confirmationcode && (
+              <span className="font-mono text-muted-foreground">{h.confirmationcode}</span>
+            )}
+            {h.bookedprice && <span className="font-semibold">{h.bookedprice}</span>}
+            {h.googlemapslink && (
+              <a
+                href={h.googlemapslink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+              >
+                Map <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+          {h.assignedto && (
+            <div className="text-[11px] text-muted-foreground">👤 {h.assignedto}</div>
           )}
         </div>
       )}
+
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { filterByRole } from "@/lib/role-filter";
+
 
 type Props = {
   flights: Flight[];
@@ -35,8 +37,10 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
 
   const { matchedFlights, matchedHotels } = useMemo(() => {
     const ymd = toYMD(selected);
-    const mf = flights.filter((f) => (f as unknown as Record<string, string>).isoDate === ymd);
-    const mh = hotels.filter((h) => {
+    const visFlights = filterByRole(flights as unknown as Record<string, unknown>[]) as unknown as Flight[];
+    const visHotels = filterByRole(hotels as unknown as Record<string, unknown>[]) as unknown as Hotel[];
+    const mf = visFlights.filter((f) => (f as unknown as Record<string, string>).isoDate === ymd);
+    const mh = visHotels.filter((h) => {
       const r = h as unknown as Record<string, string>;
       const start = toISO(r.checkindate);
       const end = toISO(r.checkoutdate) || start;
@@ -45,6 +49,7 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
     });
     return { matchedFlights: mf, matchedHotels: mh };
   }, [flights, hotels, selected]);
+
 
   const total = matchedFlights.length + matchedHotels.length;
   const setDate = (d: Date) => onDateChange(startOfDay(d));
