@@ -98,12 +98,13 @@ function Index() {
               <DailyItinerary
                 flights={data.flights}
                 hotels={data.hotels}
+                trains={data.trains ?? []}
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
               />
             )}
             {tab === "monthly" && (
-              <MonthlyView flights={data.flights} hotels={data.hotels} />
+              <MonthlyView flights={data.flights} hotels={data.hotels} trains={data.trains ?? []} />
             )}
             {tab === "uber" && (
               <UberTab

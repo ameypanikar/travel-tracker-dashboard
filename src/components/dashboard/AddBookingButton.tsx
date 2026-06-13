@@ -4,7 +4,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type Kind = "flight" | "hotel";
+type Kind = "flight" | "hotel" | "train";
 
 const SHEET_URL =
   "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec";
@@ -15,12 +15,21 @@ const FLIGHT_PROMPT =
 const HOTEL_PROMPT =
   "Extract hotel booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: hotel_name, address, city, checkin_date (DD/MM/YYYY), checkout_date (DD/MM/YYYY), confirmation_code, booking_link, cancellation_deadline (DD/MM/YYYY), booked_price. Use empty string for missing fields.";
 
+const TRAIN_PROMPT =
+  "Extract train booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: train_name, train_number, from_code (station code), city_from, to_code (station code), city_to, departure_date (DD/MM/YYYY), departure_time (HH:MM 24hr), arrival_date (DD/MM/YYYY), arrival_time (HH:MM 24hr), pnr, class. Use empty string for missing fields.";
+
 const FLIGHT_KEYS = [
   "airline","from_code","city_from","to_code","city_to","departure_date","departure_time","arrival_date","arrival_time","confirmation_code","duration","manage_link",
 ];
 const HOTEL_KEYS = [
   "hotel_name","address","city","checkin_date","checkout_date","confirmation_code","booking_link","cancellation_deadline","booked_price",
 ];
+const TRAIN_KEYS = [
+  "train_name","train_number","from_code","city_from","to_code","city_to","departure_date","departure_time","arrival_date","arrival_time","pnr","class",
+];
+
+const PROMPTS: Record<Kind, string> = { flight: FLIGHT_PROMPT, hotel: HOTEL_PROMPT, train: TRAIN_PROMPT };
+const KEYS: Record<Kind, string[]> = { flight: FLIGHT_KEYS, hotel: HOTEL_KEYS, train: TRAIN_KEYS };
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -70,7 +79,7 @@ export function AddBookingButton() {
   const extractWithGemini = async (base64: string, k: Kind, mimeType: string): Promise<Record<string, string>> => {
     const key = localStorage.getItem("gemini_api_key");
     if (!key) throw new Error("Please click ⚙️ settings to enter your Gemini API key first");
-    const prompt = k === "flight" ? FLIGHT_PROMPT : HOTEL_PROMPT;
+    const prompt = PROMPTS[k];
 
     let attempt = 0;
     while (attempt < 3) {
@@ -136,7 +145,7 @@ export function AddBookingButton() {
     try {
       const base64 = await fileToBase64(file);
       const data = await extractWithGemini(base64, kind, mimeType);
-      const keys = kind === "flight" ? FLIGHT_KEYS : HOTEL_KEYS;
+      const keys = KEYS[kind];
       const normalized: Record<string, string> = {};
       for (const k of keys) normalized[k] = String(data[k] ?? "");
       setFields(normalized);
@@ -173,7 +182,7 @@ export function AddBookingButton() {
     }
   };
 
-  const keys = kind === "flight" ? FLIGHT_KEYS : HOTEL_KEYS;
+  const keys = KEYS[kind];
 
   return (
     <>
@@ -215,8 +224,8 @@ export function AddBookingButton() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
-              {(["flight", "hotel"] as Kind[]).map((k) => (
+            <div className="grid grid-cols-3 gap-2">
+              {(["flight", "hotel", "train"] as Kind[]).map((k) => (
                 <button
                   key={k}
                   onClick={() => { setKind(k); reset(); }}
@@ -225,7 +234,7 @@ export function AddBookingButton() {
                     kind === k ? "bg-accent text-accent-foreground" : "bg-card hover:bg-accent-soft",
                   )}
                 >
-                  {k === "flight" ? "✈️ Flight" : "🏨 Hotel"}
+                  {k === "flight" ? "✈️ Flight" : k === "hotel" ? "🏨 Hotel" : "🚂 Train"}
                 </button>
               ))}
             </div>
