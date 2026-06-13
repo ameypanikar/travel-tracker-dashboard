@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import type { Flight, Hotel } from "@/lib/dashboard-api";
+import type { Flight, Hotel, Train } from "@/lib/dashboard-api";
 import { startOfDay, isSameDay, addDays, formatDayLabel } from "@/lib/date-utils";
 import { FlightCard } from "./FlightCard";
 import { HotelCard } from "./HotelCard";
+import { TrainCard } from "./TrainCard";
 import { EmptyState } from "./EmptyState";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,6 +15,7 @@ import { filterByRole } from "@/lib/role-filter";
 type Props = {
   flights: Flight[];
   hotels: Hotel[];
+  trains?: Train[];
   selectedDate: Date | null;
   onDateChange: (d: Date | null) => void;
 };
@@ -27,7 +29,7 @@ const toISO = (ddmmyyyy?: string): string => {
   return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 };
 
-export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: Props) {
+export function DailyItinerary({ flights, hotels, trains = [], selectedDate, onDateChange }: Props) {
   const today = startOfDay(new Date());
   const selected = selectedDate ?? today;
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -35,10 +37,11 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
   const stripStart = addDays(selected, -3);
   const strip = Array.from({ length: 14 }, (_, i) => addDays(stripStart, i));
 
-  const { matchedFlights, matchedHotels } = useMemo(() => {
+  const { matchedFlights, matchedHotels, matchedTrains } = useMemo(() => {
     const ymd = toYMD(selected);
     const visFlights = filterByRole(flights as unknown as Record<string, unknown>[]) as unknown as Flight[];
     const visHotels = filterByRole(hotels as unknown as Record<string, unknown>[]) as unknown as Hotel[];
+    const visTrains = filterByRole(trains as unknown as Record<string, unknown>[]) as unknown as Train[];
     const mf = visFlights.filter((f) => (f as unknown as Record<string, string>).isoDate === ymd);
     const mh = visHotels.filter((h) => {
       const r = h as unknown as Record<string, string>;
@@ -47,11 +50,12 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
       if (!start) return false;
       return ymd >= start && ymd <= end;
     });
-    return { matchedFlights: mf, matchedHotels: mh };
-  }, [flights, hotels, selected]);
+    const mt = visTrains.filter((t) => toISO((t as unknown as Record<string, string>).departuredate) === ymd);
+    return { matchedFlights: mf, matchedHotels: mh, matchedTrains: mt };
+  }, [flights, hotels, trains, selected]);
 
 
-  const total = matchedFlights.length + matchedHotels.length;
+  const total = matchedFlights.length + matchedHotels.length + matchedTrains.length;
   const setDate = (d: Date) => onDateChange(startOfDay(d));
 
   return (
@@ -139,7 +143,7 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
       {total === 0 ? (
         <EmptyState
           title="Nothing on this day"
-          message="No flights or hotel stays scheduled."
+          message="No flights, trains, or hotel stays scheduled."
         />
       ) : (
         <div className="flex flex-col gap-3">
@@ -149,6 +153,10 @@ export function DailyItinerary({ flights, hotels, selectedDate, onDateChange }: 
               flight={f}
             />
           ))}
+          {matchedTrains.map((t, i) => {
+            const r = t as unknown as Record<string, string>;
+            return <TrainCard key={r.pnr || `${r.trainnumber}-${i}`} train={t} />;
+          })}
           {matchedHotels.map((h) => (
             <HotelCard
               key={(h as unknown as Record<string, string>).confirmationcode}

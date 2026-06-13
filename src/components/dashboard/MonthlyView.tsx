@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import type { Flight, Hotel } from "@/lib/dashboard-api";
+import type { Flight, Hotel, Train } from "@/lib/dashboard-api";
 import { parseAnyDate, isSameDay, startOfDay, formatTime, formatDayLabel } from "@/lib/date-utils";
-import { ChevronLeft, ChevronRight, Plane, Hotel as HotelIcon, Bed } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plane, Hotel as HotelIcon, Bed, TrainFront } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { filterByRole } from "@/lib/role-filter";
@@ -10,11 +10,13 @@ import { filterByRole } from "@/lib/role-filter";
 type Props = {
   flights: Flight[];
   hotels: Hotel[];
+  trains?: Train[];
 };
 
 type DayEvents = {
   flights: Flight[];
   hotels: Hotel[];
+  trains: Train[];
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -27,11 +29,13 @@ const toISO = (ddmmyyyy?: string): string => {
 };
 
 const flightIso = (f: unknown): string => toISO((f as Record<string, string>)?.departuredate);
+const trainIso = (t: unknown): string => toISO((t as Record<string, string>)?.departuredate);
 
 
-export function MonthlyView({ flights: rawFlights, hotels: rawHotels }: Props) {
+export function MonthlyView({ flights: rawFlights, hotels: rawHotels, trains: rawTrains = [] }: Props) {
   const flights = filterByRole(rawFlights as unknown as Record<string, unknown>[]) as unknown as Flight[];
   const hotels = filterByRole(rawHotels as unknown as Record<string, unknown>[]) as unknown as Hotel[];
+  const trains = filterByRole(rawTrains as unknown as Record<string, unknown>[]) as unknown as Train[];
   const today = startOfDay(new Date());
 
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -67,11 +71,15 @@ export function MonthlyView({ flights: rawFlights, hotels: rawHotels }: Props) {
       const t = startOfDay(day).getTime();
       return t >= startOfDay(start).getTime() && t <= startOfDay(end!).getTime();
     });
-    return { flights: fl, hotels: ht };
+    const tr = trains.filter((t) => {
+      const d = parseAnyDate(trainIso(t));
+      return d && isSameDay(d, day);
+    });
+    return { flights: fl, hotels: ht, trains: tr };
   };
 
   const openEvents = openDay ? eventsByDay(openDay) : null;
-  const hasAny = (e: DayEvents) => e.flights.length + e.hotels.length > 0;
+  const hasAny = (e: DayEvents) => e.flights.length + e.hotels.length + e.trains.length > 0;
 
   return (
     <div className="rounded-2xl bg-card p-3 shadow-card sm:p-4">
@@ -127,6 +135,9 @@ export function MonthlyView({ flights: rawFlights, hotels: rawHotels }: Props) {
                 {ev.hotels.length > 0 && (
                   <HotelIcon className="h-4 w-4" aria-label="hotel" />
                 )}
+                {ev.trains.length > 0 && (
+                  <TrainFront className="h-4 w-4" aria-label="train" />
+                )}
               </div>
             </button>
           );
@@ -158,6 +169,29 @@ export function MonthlyView({ flights: rawFlights, hotels: rawHotels }: Props) {
                     )}
                     {f.assignedto && (
                       <div className="mt-1 text-[11px] text-muted-foreground">👤 Assigned: {f.assignedto}</div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {openEvents.trains.map((train, idx) => {
+                const t = train as unknown as Record<string, string>;
+                return (
+                  <div key={t.pnr || `${t.trainnumber}-${idx}`} className="rounded-lg border p-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-accent">
+                      <TrainFront className="h-3.5 w-3.5" /> {t.trainname || "Train"}{t.trainnumber ? ` · ${t.trainnumber}` : ""}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold">
+                      {t.from} → {t.to}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatTime(t.departuretime)} — {formatTime(t.arrivaltime)}
+                    </div>
+                    {t.pnr && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">PNR: {t.pnr}</div>
+                    )}
+                    {t.assignedto && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">👤 Assigned: {t.assignedto}</div>
                     )}
                   </div>
                 );
