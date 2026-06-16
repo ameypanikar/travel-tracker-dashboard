@@ -43,10 +43,23 @@ export type Hotel = {
   checkInIso?: string;
   checkOutIso?: string;
   isPending: boolean;
+  // Room fields
+  numberofrooms?: string;
+  roomassignments?: string;
   fields?: Record<string, string>;
 };
 
 export type Train = Record<string, string>;
+
+export type TravelEvent = {
+  eventname: string;
+  startdate: string;
+  enddate: string;
+  location: string;
+  type: string;       // Exhibition | Conference | Trade Show | Other
+  ourrole: string;    // Stall Holder | Visitor | Organiser | Sponsor
+  notes: string;
+};
 
 export type PendingItem = (Flight | Hotel) & { isPending: true };
 
@@ -55,15 +68,14 @@ export type DashboardData = {
   flights: Flight[];
   hotels: Hotel[];
   trains: Train[];
+  events: TravelEvent[];
   pending: PendingItem[];
   updatedAt: string;
   error?: string;
 };
 
 export async function fetchDashboard(): Promise<DashboardData> {
-  const res = await fetch(`${WEB_APP_URL}?action=all`, {
-    redirect: "follow",
-  });
+  const res = await fetch(`${WEB_APP_URL}?action=all`, { redirect: "follow" });
   if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status}`);
   const json = (await res.json()) as DashboardData;
   if (!json.ok) throw new Error(json.error || "Sheet API returned error");
@@ -72,6 +84,59 @@ export async function fetchDashboard(): Promise<DashboardData> {
     flights: json.flights ?? [],
     hotels: json.hotels ?? [],
     trains: json.trains ?? [],
+    events: json.events ?? [],
     pending: json.pending ?? [],
   };
+}
+
+// ── Gemini key from Config sheet ──────────────────────────────────────────────
+const GEMINI_CACHE_KEY = "gemini_api_key";
+
+export async function fetchGeminiKey(): Promise<string> {
+  // Return cached value if available
+  const cached = localStorage.getItem(GEMINI_CACHE_KEY);
+  if (cached) return cached;
+
+  const res = await fetch(`${WEB_APP_URL}?action=getConfig&key=gemini_api_key`, {
+    redirect: "follow",
+  });
+  if (!res.ok) throw new Error("Could not fetch config");
+  const json = await res.json();
+  const key = json.value || "";
+  if (key) localStorage.setItem(GEMINI_CACHE_KEY, key);
+  return key;
+}
+
+export async function saveGeminiKey(newKey: string): Promise<void> {
+  const url = `${WEB_APP_URL}?action=setConfig&payload=${encodeURIComponent(
+    JSON.stringify({ key: "gemini_api_key", value: newKey }),
+  )}`;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error("Could not save config");
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "Failed to save");
+  localStorage.setItem(GEMINI_CACHE_KEY, newKey);
+}
+
+export function getCachedGeminiKey(): string {
+  return localStorage.getItem(GEMINI_CACHE_KEY) || "";
+}
+
+// ── Append event ──────────────────────────────────────────────────────────────
+export async function appendEvent(fields: {
+  eventname: string;
+  startdate: string;
+  enddate: string;
+  location: string;
+  type: string;
+  ourrole: string;
+  notes: string;
+}): Promise<void> {
+  const url = `${WEB_APP_URL}?action=append&payload=${encodeURIComponent(
+    JSON.stringify({ kind: "event", fields }),
+  )}`;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error("Could not save event");
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "Failed to save event");
 }

@@ -12,6 +12,7 @@ import { TrainsList } from "@/components/dashboard/TrainsList";
 import { UberTab } from "@/components/dashboard/UberTab";
 import { MonthlyView } from "@/components/dashboard/MonthlyView";
 import { LocalEats } from "@/components/dashboard/LocalEats";
+import { EventsList } from "@/components/dashboard/EventsList";
 import { AddBookingButton } from "@/components/dashboard/AddBookingButton";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { clearSessionUser, getSessionUser, type SessionUser } from "@/lib/auth";
@@ -27,6 +28,7 @@ function Index() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   useEffect(() => {
+    // getSessionUser now reads from localStorage — persists across sessions
     setUser(getSessionUser());
     setAuthReady(true);
   }, []);
@@ -47,6 +49,10 @@ function Index() {
     setUser(null);
   };
 
+  // Collect all users from data for admin password reset dropdown
+  const allUsers = (data as unknown as { users?: { name: string; username: string; role: string }[] })
+    ?.users ?? [];
+
   return (
     <div className="min-h-screen bg-dashboard-bg text-foreground">
       <div className="mx-auto w-full max-w-[760px] px-4 pb-24 pt-5">
@@ -56,6 +62,7 @@ function Index() {
           updatedAt={dataUpdatedAt ? new Date(dataUpdatedAt) : null}
           user={user}
           onLogout={handleLogout}
+          allUsers={allUsers}
         />
 
         <Tabs value={tab} onChange={setTab} />
@@ -83,6 +90,11 @@ function Index() {
           </div>
         )}
 
+        {/* Events tab doesn't need data from the main query yet — it's loaded inline */}
+        {tab === "events" && (
+          <EventsList events={data?.events ?? []} onRefresh={() => refetch()} />
+        )}
+
         {data && !isLoading && (
           <>
             {tab === "flights" && (
@@ -92,7 +104,10 @@ function Index() {
               <HotelsList hotels={data.hotels} selectedDate={selectedDate} />
             )}
             {tab === "trains" && (
-              <TrainsList trains={(data.trains ?? []) as unknown as Record<string, string>[]} selectedDate={selectedDate} />
+              <TrainsList
+                trains={(data.trains ?? []) as unknown as Record<string, string>[]}
+                selectedDate={selectedDate}
+              />
             )}
             {tab === "day" && (
               <DailyItinerary
@@ -104,7 +119,11 @@ function Index() {
               />
             )}
             {tab === "monthly" && (
-              <MonthlyView flights={data.flights} hotels={data.hotels} trains={data.trains ?? []} />
+              <MonthlyView
+                flights={data.flights}
+                hotels={data.hotels}
+                trains={data.trains ?? []}
+              />
             )}
             {tab === "uber" && (
               <UberTab
@@ -118,7 +137,9 @@ function Index() {
             )}
             {tab === "eats" && (
               <LocalEats
-                defaultLocation={data.hotels[0]?.city || data.hotels[0]?.address || ""}
+                defaultLocation={
+                  data.hotels[0]?.city || data.hotels[0]?.address || ""
+                }
               />
             )}
           </>

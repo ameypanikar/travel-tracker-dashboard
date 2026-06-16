@@ -1,11 +1,12 @@
-import { Plane, Hotel, Sun, Car, CalendarDays, UtensilsCrossed, TrainFront } from "lucide-react";
+import { Plane, Hotel, Sun, Car, CalendarDays, UtensilsCrossed, TrainFront, CalendarCheck } from "lucide-react";
 
-export type TabKey = "flights" | "hotels" | "trains" | "day" | "monthly" | "uber" | "eats";
+export type TabKey = "flights" | "hotels" | "trains" | "day" | "monthly" | "uber" | "eats" | "events";
 
 const TABS: { key: TabKey; label: string; icon: typeof Plane }[] = [
   { key: "flights", label: "Flights", icon: Plane },
   { key: "hotels", label: "Hotels", icon: Hotel },
   { key: "trains", label: "Trains", icon: TrainFront },
+  { key: "events", label: "Events", icon: CalendarCheck },
   { key: "day", label: "Itinerary", icon: Sun },
   { key: "monthly", label: "Monthly", icon: CalendarDays },
   { key: "uber", label: "Uber", icon: Car },
@@ -19,7 +20,7 @@ type Props = {
 
 export function Tabs({ value, onChange }: Props) {
   return (
-    <div className="mb-3 grid grid-cols-4 gap-2 sm:grid-cols-7">
+    <div className="mb-3 grid grid-cols-4 gap-2 sm:grid-cols-8">
       {TABS.map((t) => {
         const Icon = t.icon;
         const active = value === t.key;

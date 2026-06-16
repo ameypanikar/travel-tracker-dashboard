@@ -1,15 +1,19 @@
 export const USERS_URL =
   "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec?action=getUsers";
 
+export const WEB_APP_URL =
+  "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec";
+
 export type SessionUser = { name: string; username: string; role: string };
 type StoredUser = SessionUser & { password: string };
 
-const STORAGE_KEY = "loggedInUser";
+// Use localStorage so login persists across browser sessions / device restarts
+const STORAGE_KEY = "travel_dashboard_user";
 
 export function getSessionUser(): SessionUser | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
     return raw ? (JSON.parse(raw) as SessionUser) : null;
   } catch {
     return null;
@@ -17,14 +21,17 @@ export function getSessionUser(): SessionUser | null {
 }
 
 export function setSessionUser(user: SessionUser) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  // Also keep sessionStorage in sync for any legacy references
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 }
 
 export function clearSessionUser() {
+  window.localStorage.removeItem(STORAGE_KEY);
   window.sessionStorage.removeItem(STORAGE_KEY);
 }
 
-async function sha256Hex(text: string): Promise<string> {
+export async function sha256Hex(text: string): Promise<string> {
   const enc = new TextEncoder().encode(text);
   const buf = await crypto.subtle.digest("SHA-256", enc);
   return Array.from(new Uint8Array(buf))
@@ -41,38 +48,54 @@ export async function login(
   const json = (await res.json()) as { ok?: boolean; users?: StoredUser[] } | StoredUser[];
   const users: StoredUser[] = Array.isArray(json) ? json : (json.users ?? []);
 
-  const enteredUser = username.trim();
-  const enteredUserLower = enteredUser.toLowerCase();
-  console.log("[auth] login attempt", {
-    username: enteredUser,
-    password,
-    usersFetched: users.length,
-    knownUsernames: users.map((u) => u.username),
-  });
-
+  const enteredUserLower = username.trim().toLowerCase();
   const hashed = await sha256Hex(password);
 
-  // 1) plain-text + case-insensitive username
+  // Try plain-text first (legacy), then hashed
   let u = users.find(
-    (x) =>
-      (x.username ?? "").toLowerCase() === enteredUserLower &&
-      x.password === password,
+    (x) => (x.username ?? "").toLowerCase() === enteredUserLower && x.password === password,
   );
-
-  // 2) SHA-256 hashed password fallback
   if (!u) {
     u = users.find(
-      (x) =>
-        (x.username ?? "").toLowerCase() === enteredUserLower &&
-        x.password === hashed,
+      (x) => (x.username ?? "").toLowerCase() === enteredUserLower && x.password === hashed,
     );
   }
 
-  if (!u) {
-    console.warn("[auth] no match for", enteredUser);
-    throw new Error("Invalid username or password");
-  }
+  if (!u) throw new Error("Invalid username or password");
+
   const session: SessionUser = { name: u.name, username: u.username, role: u.role };
   setSessionUser(session);
   return session;
+}
+
+export async function changePassword(
+  username: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  // Verify current password first
+  await login(username, currentPassword);
+
+  const newHash = await sha256Hex(newPassword);
+  const url = `${WEB_APP_URL}?action=updatePassword&payload=${encodeURIComponent(
+    JSON.stringify({ username, password: newHash }),
+  )}`;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error("Could not reach server");
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "Failed to update password");
+}
+
+export async function adminResetPassword(
+  targetUsername: string,
+  newPassword: string,
+): Promise<void> {
+  const newHash = await sha256Hex(newPassword);
+  const url = `${WEB_APP_URL}?action=updatePassword&payload=${encodeURIComponent(
+    JSON.stringify({ username: targetUsername, password: newHash }),
+  )}`;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error("Could not reach server");
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "Failed to reset password");
 }

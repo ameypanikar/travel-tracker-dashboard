@@ -1,9 +1,17 @@
 import type { Hotel } from "@/lib/dashboard-api";
-import { Hotel as HotelIcon, ExternalLink, MapPin } from "lucide-react";
+import { Hotel as HotelIcon, ExternalLink, MapPin, DoorOpen } from "lucide-react";
 
 export function HotelCard({ hotel }: { hotel: Hotel }) {
   const h = hotel as unknown as Record<string, string>;
   const status = (h.bookingstatus || "").toUpperCase();
+
+  // Parse room assignments: "Rajesh K - 101, Mrunal K - 102"
+  const roomAssignmentsRaw = h.roomassignments || "";
+  const roomList = roomAssignmentsRaw
+    ? roomAssignmentsRaw.split(",").map((r) => r.trim()).filter(Boolean)
+    : [];
+  const numRooms = h.numberofrooms ? parseInt(h.numberofrooms, 10) : roomList.length || null;
+
   return (
     <div className="rounded-2xl bg-card p-4 shadow-card">
       <div className="mb-2 flex items-start justify-between gap-2">
@@ -11,17 +19,25 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
           <HotelIcon className="h-4 w-4" />
           <span>{h.hotelname || "Hotel"}</span>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-            status === "BOOKED"
-              ? "bg-success-soft text-success"
-              : status === "PENDING"
-                ? "bg-destructive/10 text-destructive"
-                : "bg-muted text-muted-foreground"
-          }`}
-        >
-          {status || "—"}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {numRooms && (
+            <span className="flex items-center gap-0.5 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
+              <DoorOpen className="h-3 w-3" />
+              {numRooms} {numRooms === 1 ? "room" : "rooms"}
+            </span>
+          )}
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+              status === "BOOKED"
+                ? "bg-success-soft text-success"
+                : status === "PENDING"
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {status || "—"}
+          </span>
+        </div>
       </div>
 
       {h.city && (
@@ -46,6 +62,34 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
         </div>
       </div>
 
+      {/* Room assignments breakdown */}
+      {roomList.length > 0 && (
+        <div className="mt-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Room Assignments
+          </div>
+          <div className="space-y-0.5">
+            {roomList.map((r, i) => {
+              // Try to split "Person - RoomNum" or "Person → RoomNum"
+              const parts = r.split(/[-–→]+/).map((p) => p.trim());
+              return (
+                <div key={i} className="flex items-center gap-1 text-xs">
+                  {parts.length === 2 ? (
+                    <>
+                      <span className="font-medium">{parts[0]}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-mono font-semibold text-accent">Room {parts[1]}</span>
+                    </>
+                  ) : (
+                    <span>{r}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {(h.confirmationcode || h.bookedprice || h.googlemapslink || h.assignedto) && (
         <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs">
           <div className="flex flex-wrap items-center gap-3">
@@ -69,7 +113,6 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
           )}
         </div>
       )}
-
     </div>
   );
 }
