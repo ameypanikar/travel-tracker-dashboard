@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { TrainCard, type Train } from "./TrainCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
@@ -18,28 +19,77 @@ export function TrainsList({
   trains: Train[];
   selectedDate?: Date | null;
 }) {
-  const visible = filterByRole(trains as unknown as Record<string, unknown>[]) as unknown as Train[];
-  const filtered = selectedDate
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
+
+  const visible = filterByRole(
+    trains as unknown as Record<string, unknown>[],
+  ) as unknown as Train[];
+
+  const allAssignees = Array.from(
+    new Set(
+      visible.flatMap((t) =>
+        (t.assignedto || "").split(",").map((s) => s.trim()).filter(Boolean)
+      )
+    )
+  ).sort();
+
+  const dateFiltered = selectedDate
     ? visible.filter((t) => toISO(t.departuredate) === toYMD(selectedDate))
     : visible;
 
-  if (!filtered.length) {
-    return (
-      <EmptyState
-        title={selectedDate ? "No trains on this date" : "No trains yet"}
-        message={
-          selectedDate
-            ? "Try clearing the date filter or pick another day."
-            : "Add a row to your Trains sheet."
-        }
-      />
-    );
-  }
+  const filtered =
+    assignedFilter === "all"
+      ? dateFiltered
+      : dateFiltered.filter((t) =>
+          (t.assignedto || "").split(",").map((s) => s.trim()).includes(assignedFilter)
+        );
+
   return (
-    <div className="flex flex-col gap-3">
-      {filtered.map((t, i) => (
-        <TrainCard key={t.pnr || `${t.trainnumber}-${i}`} train={t} />
-      ))}
+    <div>
+      {allAssignees.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setAssignedFilter("all")}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+              assignedFilter === "all"
+                ? "bg-accent text-accent-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent-soft"
+            }`}
+          >
+            All
+          </button>
+          {allAssignees.map((name) => (
+            <button
+              key={name}
+              onClick={() => setAssignedFilter(name)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                assignedFilter === name
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent-soft"
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!filtered.length ? (
+        <EmptyState
+          title={selectedDate ? "No trains on this date" : "No trains yet"}
+          message={
+            selectedDate
+              ? "Try clearing the date filter or pick another day."
+              : "Add a row to your Trains sheet."
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {filtered.map((t, i) => (
+            <TrainCard key={t.pnr || `${t.trainnumber}-${i}`} train={t} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

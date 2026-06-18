@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Settings, X, Upload, Loader2 } from "lucide-react";
+import { Plus, X, Upload, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -10,22 +10,25 @@ const SHEET_URL =
   "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec";
 
 const FLIGHT_PROMPT =
-  "Extract flight booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: airline, from_code (airport code), city_from, to_code (airport code), city_to, departure_date (DD/MM/YYYY), departure_time (HH:MM 24hr), arrival_date (DD/MM/YYYY), arrival_time (HH:MM 24hr), confirmation_code, duration (HH:MM), manage_link. Use empty string for missing fields.";
+  "Extract flight booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: airline, from_code (airport code), city_from, to_code (airport code), city_to, departure_date (DD/MM/YYYY), departure_time (HH:MM 24hr), arrival_date (DD/MM/YYYY), arrival_time (HH:MM 24hr), confirmation_code, duration (HH:MM), manage_link, assigned_to (full name(s) of passenger(s) as written on the ticket, comma-separated if multiple, empty string if not found). Use empty string for missing fields.";
 
 const HOTEL_PROMPT =
-  "Extract hotel booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: hotel_name, address, city, checkin_date (DD/MM/YYYY), checkout_date (DD/MM/YYYY), confirmation_code, booking_link, cancellation_deadline (DD/MM/YYYY), booked_price. Use empty string for missing fields.";
+  "Extract hotel booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: hotel_name, address, city, checkin_date (DD/MM/YYYY), checkout_date (DD/MM/YYYY), confirmation_code, booking_link, cancellation_deadline (DD/MM/YYYY), booked_price, assigned_to (full name(s) of guest(s) as written on the booking, comma-separated if multiple, empty string if not found). Use empty string for missing fields.";
 
 const TRAIN_PROMPT =
-  "Extract train booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: train_name, train_number, from_code (station code), city_from, to_code (station code), city_to, departure_date (DD/MM/YYYY), departure_time (HH:MM 24hr), arrival_date (DD/MM/YYYY), arrival_time (HH:MM 24hr), pnr, class. Use empty string for missing fields.";
+  "Extract train booking details and return ONLY a raw JSON object with no markdown, no backticks, just the JSON. Keys: train_name, train_number, from_code (station code), city_from, to_code (station code), city_to, departure_date (DD/MM/YYYY), departure_time (HH:MM 24hr), arrival_date (DD/MM/YYYY), arrival_time (HH:MM 24hr), pnr, class, assigned_to (full name(s) of passenger(s) as written on the ticket, comma-separated if multiple, empty string if not found). Use empty string for missing fields.";
 
 const FLIGHT_KEYS = [
-  "airline","from_code","city_from","to_code","city_to","departure_date","departure_time","arrival_date","arrival_time","confirmation_code","duration","manage_link",
+  "airline","from_code","city_from","to_code","city_to","departure_date","departure_time",
+  "arrival_date","arrival_time","confirmation_code","duration","manage_link","assigned_to",
 ];
 const HOTEL_KEYS = [
-  "hotel_name","address","city","checkin_date","checkout_date","confirmation_code","booking_link","cancellation_deadline","booked_price",
+  "hotel_name","address","city","checkin_date","checkout_date","confirmation_code",
+  "booking_link","cancellation_deadline","booked_price","assigned_to",
 ];
 const TRAIN_KEYS = [
-  "train_name","train_number","from_code","city_from","to_code","city_to","departure_date","departure_time","arrival_date","arrival_time","pnr","class",
+  "train_name","train_number","from_code","city_from","to_code","city_to","departure_date",
+  "departure_time","arrival_date","arrival_time","pnr","class","assigned_to",
 ];
 
 const PROMPTS: Record<Kind, string> = { flight: FLIGHT_PROMPT, hotel: HOTEL_PROMPT, train: TRAIN_PROMPT };
@@ -46,8 +49,6 @@ function fileToBase64(file: File): Promise<string> {
 
 export function AddBookingButton() {
   const [open, setOpen] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey] = useState("");
   const [kind, setKind] = useState<Kind>("flight");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
@@ -57,11 +58,8 @@ export function AddBookingButton() {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (open) {
-      setApiKey(localStorage.getItem("gemini_api_key") || "");
-    }
-  }, [open]);
+  // Fetch Gemini key from localStorage (set via Settings modal in TopBar)
+  const getApiKey = () => localStorage.getItem("gemini_api_key") || "";
 
   const reset = useCallback(() => {
     setFields(null);
@@ -71,20 +69,19 @@ export function AddBookingButton() {
     if (inputRef.current) inputRef.current.value = "";
   }, []);
 
-  const saveKey = (val: string) => {
-    setApiKey(val);
-    localStorage.setItem("gemini_api_key", val);
-  };
-
-  const extractWithGemini = async (base64: string, k: Kind, mimeType: string): Promise<Record<string, string>> => {
-    const key = localStorage.getItem("gemini_api_key");
-    if (!key) throw new Error("Please click ⚙️ settings to enter your Gemini API key first");
+  const extractWithGemini = async (
+    base64: string,
+    k: Kind,
+    mimeType: string,
+  ): Promise<Record<string, string>> => {
+    const key = getApiKey();
+    if (!key) throw new Error("Gemini API key not set. Use the ⚙️ Settings icon in the top bar to add it.");
     const prompt = PROMPTS[k];
 
     let attempt = 0;
     while (attempt < 3) {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -108,7 +105,7 @@ export function AddBookingButton() {
           setStatus(`Rate limited - retrying in ${s}s...`);
           await new Promise((r) => setTimeout(r, 1000));
         }
-        setStatus("Reading PDF... please wait");
+        setStatus("Reading file... please wait");
         continue;
       }
 
@@ -122,8 +119,8 @@ export function AddBookingButton() {
       const cleaned = text.replace(/```json|```/g, "").trim();
       try {
         return JSON.parse(cleaned);
-      } catch (e) {
-        throw new Error(`Failed to parse JSON from Gemini: ${cleaned.slice(0, 200)}`);
+      } catch {
+        throw new Error(`Failed to parse response: ${cleaned.slice(0, 200)}`);
       }
     }
     throw new Error("Failed after retries");
@@ -131,8 +128,8 @@ export function AddBookingButton() {
 
   const handleFile = async (file: File) => {
     reset();
-    if (!localStorage.getItem("gemini_api_key")) {
-      setError("Please click ⚙️ settings to enter your Gemini API key first");
+    if (!getApiKey()) {
+      setError("Gemini API key not set. Use the ⚙️ Settings icon in the top bar to add it.");
       return;
     }
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -140,8 +137,9 @@ export function AddBookingButton() {
     if (ext === "jpg" || ext === "jpeg") mimeType = "image/jpeg";
     else if (ext === "png") mimeType = "image/png";
     else if (ext === "webp") mimeType = "image/webp";
+
     setLoading(true);
-    setStatus("Reading PDF... please wait");
+    setStatus("Reading file... please wait");
     try {
       const base64 = await fileToBase64(file);
       const data = await extractWithGemini(base64, kind, mimeType);
@@ -194,36 +192,20 @@ export function AddBookingButton() {
         <Plus className="h-4 w-4" /> Add Booking
       </button>
 
-      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { reset(); setShowSettings(false); } }}>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) reset();
+        }}
+      >
         <DialogContent className="max-w-lg p-0">
           <div className="flex items-center justify-between border-b p-4">
             <div className="text-base font-bold">Add Booking</div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowSettings((s) => !s)}
-                className="rounded-lg p-1.5 hover:bg-accent-soft"
-                aria-label="Settings"
-              >
-                <Settings className="h-4 w-4" />
-              </button>
-            </div>
           </div>
 
           <div className="space-y-4 p-4">
-            {showSettings && (
-              <div className="rounded-lg border bg-muted/30 p-3">
-                <label className="mb-1 block text-xs font-semibold">Gemini API Key</label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => saveKey(e.target.value)}
-                  placeholder="AIza..."
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                />
-                <p className="mt-1 text-[11px] text-muted-foreground">Stored locally in your browser.</p>
-              </div>
-            )}
-
+            {/* Booking type selector */}
             <div className="grid grid-cols-3 gap-2">
               {(["flight", "hotel", "train"] as Kind[]).map((k) => (
                 <button
@@ -239,6 +221,7 @@ export function AddBookingButton() {
               ))}
             </div>
 
+            {/* Drop zone */}
             <div
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
@@ -263,7 +246,7 @@ export function AddBookingButton() {
             {loading && (
               <div className="flex items-center gap-2 rounded-lg bg-muted/30 p-3 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{status || "Reading PDF... please wait"}</span>
+                <span>{status || "Reading file... please wait"}</span>
               </div>
             )}
 
@@ -282,8 +265,16 @@ export function AddBookingButton() {
                   <table className="w-full text-sm">
                     <tbody>
                       {keys.map((k) => (
-                        <tr key={k} className="border-b last:border-0">
-                          <td className="w-1/3 px-3 py-1.5 text-xs font-semibold text-muted-foreground">{k}</td>
+                        <tr
+                          key={k}
+                          className={cn(
+                            "border-b last:border-0",
+                            k === "assigned_to" && "bg-accent-soft/50",
+                          )}
+                        >
+                          <td className="w-1/3 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                            {k === "assigned_to" ? "👤 assigned_to" : k}
+                          </td>
                           <td className="px-3 py-1.5">
                             <input
                               value={fields[k] ?? ""}

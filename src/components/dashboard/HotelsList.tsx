@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Hotel } from "@/lib/dashboard-api";
 import { HotelCard } from "./HotelCard";
 import { EmptyState } from "./EmptyState";
@@ -20,11 +21,22 @@ export function HotelsList({
   hotels: Hotel[];
   selectedDate?: Date | null;
 }) {
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
+
   const visible = filterByRole(
     hotels as unknown as Record<string, unknown>[],
   ) as unknown as Hotel[];
 
-  const filtered = selectedDate
+  const allAssignees = Array.from(
+    new Set(
+      visible.flatMap((h) => {
+        const r = h as unknown as Record<string, string>;
+        return (r.assignedto || "").split(",").map((s) => s.trim()).filter(Boolean);
+      })
+    )
+  ).sort();
+
+  const dateFiltered = selectedDate
     ? visible.filter((h) => {
         const r = h as unknown as Record<string, string>;
         const start = toISO(r.checkindate);
@@ -34,6 +46,14 @@ export function HotelsList({
         return ymd >= start && ymd <= end;
       })
     : visible;
+
+  const filtered =
+    assignedFilter === "all"
+      ? dateFiltered
+      : dateFiltered.filter((h) => {
+          const r = h as unknown as Record<string, string>;
+          return (r.assignedto || "").split(",").map((s) => s.trim()).includes(assignedFilter);
+        });
 
   // ── Room summary ───────────────────────────────────────────────
   const totalRooms = filtered.reduce((sum, h) => {
@@ -73,6 +93,34 @@ export function HotelsList({
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Assignee filter */}
+      {allAssignees.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setAssignedFilter("all")}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+              assignedFilter === "all"
+                ? "bg-accent text-accent-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent-soft"
+            }`}
+          >
+            All
+          </button>
+          {allAssignees.map((name) => (
+            <button
+              key={name}
+              onClick={() => setAssignedFilter(name)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                assignedFilter === name
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent-soft"
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Summary banner */}
       <div className="rounded-2xl bg-card px-4 py-3 shadow-card">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold">
