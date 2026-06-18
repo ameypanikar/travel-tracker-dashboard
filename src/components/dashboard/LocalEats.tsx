@@ -144,6 +144,10 @@ function getCuisinePhoto(cuisine: string): string {
   return CUISINE_PHOTOS.default;
 }
 
+type Props = {
+  defaultLocation?: string;
+};
+
 export function LocalEats({ defaultLocation = "" }: Props) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(false);
