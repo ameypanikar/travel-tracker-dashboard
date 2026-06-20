@@ -58,6 +58,25 @@ export function FlightsList({
             .includes(assignedFilter);
         });
 
+  // Split into upcoming (today or future) and past, each sorted ascending by date
+  const todayYMD = toYMD(new Date());
+  const upcoming: Flight[] = [];
+  const past: Flight[] = [];
+  for (const f of filtered) {
+    const r = f as unknown as Record<string, string>;
+    const iso = toISO(r.departuredate);
+    if (iso && iso < todayYMD) past.push(f);
+    else upcoming.push(f);
+  }
+  const byDateAsc = (a: Flight, b: Flight) => {
+    const ra = a as unknown as Record<string, string>;
+    const rb = b as unknown as Record<string, string>;
+    return toISO(ra.departuredate).localeCompare(toISO(rb.departuredate));
+  };
+  upcoming.sort(byDateAsc);
+  past.sort(byDateAsc);
+  const ordered = [...upcoming, ...past];
+
   return (
     <div>
       {/* Assignee filter */}
@@ -100,12 +119,17 @@ export function FlightsList({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {filtered.map((f) => (
-            <FlightCard
-              key={(f as unknown as Record<string, string>).confirmationcode}
-              flight={f}
-            />
-          ))}
+          {ordered.map((f) => {
+            const r = f as unknown as Record<string, string>;
+            const isPast = toISO(r.departuredate) < todayYMD;
+            return (
+              <FlightCard
+                key={r.confirmationcode}
+                flight={f}
+                isPast={isPast}
+              />
+            );
+          })}
         </div>
       )}
     </div>

@@ -80,7 +80,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function TrainCard({ train }: { train: Train }) {
+export function TrainCard({ train, isPast = false }: { train: Train; isPast?: boolean }) {
   const t = train;
   const depDate = parseDateTime(t.departuredate, t.departuretime);
   const arrDate = parseDateTime(t.arrivaldate, t.arrivaltime);
@@ -105,7 +105,16 @@ export function TrainCard({ train }: { train: Train }) {
   const sleepers = Array.from({ length: 8 }, (_, i) => x0 + ((xEnd - x0) / 9) * (i + 1));
 
   return (
-    <div className="rounded-2xl bg-card p-4 shadow-card">
+    <div
+      className={`relative rounded-2xl bg-card p-4 shadow-card transition ${
+        isPast ? "opacity-60 grayscale saturate-50" : ""
+      }`}
+    >
+      {isPast && (
+        <span className="absolute right-3 top-3 z-10 rounded-full bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+          Past
+        </span>
+      )}
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-accent">

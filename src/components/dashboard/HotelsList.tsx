@@ -55,6 +55,25 @@ export function HotelsList({
           return (r.assignedto || "").split(",").map((s) => s.trim()).includes(assignedFilter);
         });
 
+  // Split into upcoming (checkout today or in future) vs past (checked out already)
+  const todayYMD = toYMD(new Date());
+  const upcoming: Hotel[] = [];
+  const past: Hotel[] = [];
+  for (const h of filtered) {
+    const r = h as unknown as Record<string, string>;
+    const checkout = toISO(r.checkoutdate) || toISO(r.checkindate);
+    if (checkout && checkout < todayYMD) past.push(h);
+    else upcoming.push(h);
+  }
+  const byCheckinAsc = (a: Hotel, b: Hotel) => {
+    const ra = a as unknown as Record<string, string>;
+    const rb = b as unknown as Record<string, string>;
+    return toISO(ra.checkindate).localeCompare(toISO(rb.checkindate));
+  };
+  upcoming.sort(byCheckinAsc);
+  past.sort(byCheckinAsc);
+  const ordered = [...upcoming, ...past];
+
   // ── Room summary ───────────────────────────────────────────────
   const totalRooms = filtered.reduce((sum, h) => {
     const r = h as unknown as Record<string, string>;
@@ -139,12 +158,18 @@ export function HotelsList({
         </div>
       </div>
 
-      {filtered.map((h) => (
-        <HotelCard
-          key={(h as unknown as Record<string, string>).confirmationcode}
-          hotel={h}
-        />
-      ))}
+      {ordered.map((h) => {
+        const r = h as unknown as Record<string, string>;
+        const checkout = toISO(r.checkoutdate) || toISO(r.checkindate);
+        const isPast = checkout < todayYMD;
+        return (
+          <HotelCard
+            key={r.confirmationcode}
+            hotel={h}
+            isPast={isPast}
+          />
+        );
+      })}
     </div>
   );
 }

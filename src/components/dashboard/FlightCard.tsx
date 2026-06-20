@@ -57,7 +57,7 @@ function PlaneShape({ color }: { color: string }) {
   );
 }
 
-export function FlightCard({ flight }: { flight: Flight }) {
+export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?: boolean }) {
   const f = flight as unknown as Record<string, string>;
   const status = (f.bookingstatus || "").toUpperCase();
   const depDate = parseDateTime(f.departuredate, f.departuretime);
@@ -86,7 +86,16 @@ export function FlightCard({ flight }: { flight: Flight }) {
   const planeAngle = bezierAngle(progress, x0, y0, cx, cy, x1, y1);
 
   return (
-    <div className="rounded-2xl bg-card p-4 shadow-card">
+    <div
+      className={`relative rounded-2xl bg-card p-4 shadow-card transition ${
+        isPast ? "opacity-60 grayscale saturate-50" : ""
+      }`}
+    >
+      {isPast && (
+        <span className="absolute right-3 top-3 z-10 rounded-full bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+          Past
+        </span>
+      )}
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-accent">

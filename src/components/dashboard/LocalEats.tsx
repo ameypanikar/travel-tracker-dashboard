@@ -6,6 +6,7 @@ type Restaurant = {
   id: string;
   name: string;
   cuisine: string;
+  cuisineRaw: string;
   lat: number;
   lon: number;
   distanceKm: number;
@@ -47,43 +48,57 @@ async function fetchNearbyRestaurants(
   cuisine: CuisineFilter,
   signal: AbortSignal,
 ): Promise<Restaurant[]> {
-  // Build search query
-  const amenityMap: Record<CuisineFilter, string> = {
-    all: "restaurant",
-    indian: "restaurant",
-    chinese: "restaurant",
-    italian: "restaurant",
-    fast_food: "fast_food",
-    cafe: "cafe",
-    pizza: "restaurant",
-    seafood: "restaurant",
-    vegetarian: "restaurant",
+  // Nominatim's basic search API doesn't support arbitrary OSM tag filters (e.g. cuisine=X)
+  // reliably, so we always fetch a broad amenity-based set, then filter by cuisine client-side
+  // using the extratags.cuisine field returned per result.
+  const amenityQueries: { amenity: string }[] =
+    cuisine === "cafe"
+      ? [{ amenity: "cafe" }]
+      : cuisine === "fast_food"
+        ? [{ amenity: "fast_food" }]
+        : [{ amenity: "restaurant" }, { amenity: "fast_food" }, { amenity: "cafe" }];
+
+  const allResults: Record<string, unknown>[] = [];
+
+  for (const q of amenityQueries) {
+    const url =
+      `https://nominatim.openstreetmap.org/search` +
+      `?format=json&limit=40&addressdetails=1&extratags=1` +
+      `&amenity=${q.amenity}` +
+      `&viewbox=${lon - 0.05},${lat + 0.05},${lon + 0.05},${lat - 0.05}` +
+      `&bounded=1`;
+
+    const res = await fetch(url, {
+      signal,
+      headers: { "Accept-Language": "en", "User-Agent": "TravelDashboard/1.0" },
+    });
+    if (!res.ok) continue; // skip this amenity type on failure, don't abort entire search
+    const data = await res.json();
+    if (Array.isArray(data)) allResults.push(...data);
+  }
+
+  if (allResults.length === 0) throw new Error("Search failed — no results from map service");
+
+  // Cuisine keywords to match against each result's extratags.cuisine value
+  const CUISINE_KEYWORDS: Record<string, string[]> = {
+    indian: ["indian"],
+    chinese: ["chinese", "asian"],
+    italian: ["italian"],
+    pizza: ["pizza"],
+    seafood: ["seafood", "fish"],
+    vegetarian: ["vegetarian", "vegan"],
   };
 
-  const amenity = amenityMap[cuisine];
-  const cuisineTag = cuisine !== "all" && cuisine !== "fast_food" && cuisine !== "cafe"
-    ? `&tag=cuisine:${cuisine}` : "";
-
-  // Nominatim search around coordinates
-  const url =
-    `https://nominatim.openstreetmap.org/search` +
-    `?format=json&limit=40&addressdetails=1&extratags=1` +
-    `&amenity=${amenity}${cuisineTag}` +
-    `&viewbox=${lon - 0.05},${lat + 0.05},${lon + 0.05},${lat - 0.05}` +
-    `&bounded=1`;
-
-  const res = await fetch(url, {
-    signal,
-    headers: { "Accept-Language": "en", "User-Agent": "TravelDashboard/1.0" },
+  // Dedupe by place_id (same place may appear in multiple amenity queries)
+  const seen = new Set<string>();
+  const deduped = allResults.filter((el) => {
+    const id = String(el.place_id);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return el.display_name && el.lat && el.lon;
   });
 
-  if (!res.ok) throw new Error(`Search failed: HTTP ${res.status}`);
-  const data = await res.json();
-
-  if (!Array.isArray(data)) throw new Error("Unexpected response format");
-
-  const results: Restaurant[] = data
-    .filter((el: Record<string, unknown>) => el.display_name && el.lat && el.lon)
+  let results: Restaurant[] = deduped
     .map((el: Record<string, unknown>) => {
       const elLat = parseFloat(el.lat as string);
       const elLon = parseFloat(el.lon as string);
@@ -107,6 +122,7 @@ async function fetchNearbyRestaurants(
         id: String(el.place_id),
         name: (el.name as string) || (el.display_name as string).split(",")[0],
         cuisine: cuisineLabel,
+        cuisineRaw: (extratags.cuisine || "").toLowerCase(),
         lat: elLat,
         lon: elLon,
         distanceKm: Math.round(haversineKm(lat, lon, elLat, elLon) * 10) / 10,
@@ -114,8 +130,18 @@ async function fetchNearbyRestaurants(
         openingHours: extratags.opening_hours,
         phone: extratags.phone || extratags["contact:phone"],
       };
-    })
-    .sort((a: Restaurant, b: Restaurant) => a.distanceKm - b.distanceKm)
+    });
+
+  // Apply client-side cuisine filter (skip for all/cafe/fast_food which are already amenity-filtered)
+  if (CUISINE_KEYWORDS[cuisine]) {
+    const keywords = CUISINE_KEYWORDS[cuisine];
+    results = results.filter((r) =>
+      keywords.some((kw) => r.cuisineRaw.includes(kw) || r.cuisine.toLowerCase().includes(kw))
+    );
+  }
+
+  results = results
+    .sort((a, b) => a.distanceKm - b.distanceKm)
     .slice(0, 20);
 
   return results;
@@ -165,12 +191,9 @@ function getRestaurantPhoto(name: string, id: string): string {
   }
   return FOOD_PHOTOS[hash % FOOD_PHOTOS.length];
 }
-
 type Props = {
   defaultLocation?: string;
 };
-
-
 export function LocalEats({ defaultLocation = "" }: Props) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(false);

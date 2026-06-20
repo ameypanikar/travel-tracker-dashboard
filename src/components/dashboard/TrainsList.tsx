@@ -44,6 +44,19 @@ export function TrainsList({
           (t.assignedto || "").split(",").map((s) => s.trim()).includes(assignedFilter)
         );
 
+  const todayYMD = toYMD(new Date());
+  const upcoming: Train[] = [];
+  const past: Train[] = [];
+  for (const t of filtered) {
+    const iso = toISO(t.departuredate);
+    if (iso && iso < todayYMD) past.push(t);
+    else upcoming.push(t);
+  }
+  const byDateAsc = (a: Train, b: Train) => toISO(a.departuredate).localeCompare(toISO(b.departuredate));
+  upcoming.sort(byDateAsc);
+  past.sort(byDateAsc);
+  const ordered = [...upcoming, ...past];
+
   return (
     <div>
       {allAssignees.length > 0 && (
@@ -85,9 +98,12 @@ export function TrainsList({
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {filtered.map((t, i) => (
-            <TrainCard key={t.pnr || `${t.trainnumber}-${i}`} train={t} />
-          ))}
+          {ordered.map((t, i) => {
+            const isPast = toISO(t.departuredate) < todayYMD;
+            return (
+              <TrainCard key={t.pnr || `${t.trainnumber}-${i}`} train={t} isPast={isPast} />
+            );
+          })}
         </div>
       )}
     </div>
