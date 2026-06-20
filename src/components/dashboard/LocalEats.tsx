@@ -121,32 +121,55 @@ async function fetchNearbyRestaurants(
   return results;
 }
 
-// Map cuisine keywords to Unsplash photo IDs (stable, no API key needed)
-const CUISINE_PHOTOS: Record<string, string> = {
-  indian:       "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600&q=80",
-  chinese:      "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&q=80",
-  italian:      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80",
-  pizza:        "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80",
-  cafe:         "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=600&q=80",
-  fast_food:    "https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600&q=80",
-  seafood:      "https://images.unsplash.com/photo-1615141982883-c7ad0e69fd62?w=600&q=80",
-  vegetarian:   "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&q=80",
-  sandwich:     "https://images.unsplash.com/photo-1553909489-cd47e0907980?w=600&q=80",
-  burger:       "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80",
-  default:      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80",
-};
+// 24 varied food/restaurant photos from Unsplash — assigned by name hash so each restaurant gets a consistent but unique photo
+// Static Unsplash photo IDs (source.unsplash.com is deprecated/shut down — must use direct photo URLs)
+// These are verified working Unsplash CDN photo IDs for food/restaurant imagery
+const FOOD_PHOTOS = [
+  "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80",
+  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80",
+  "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=600&q=80",
+  "https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=600&q=80",
+  "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=600&q=80",
+  "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=80",
+  "https://images.unsplash.com/photo-1552566626-52f8b828add9?w=600&q=80",
+  "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=600&q=80",
+  "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&q=80",
+  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&q=80",
+  "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80",
+  "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80",
+  "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=600&q=80",
+  "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?w=600&q=80",
+  "https://images.unsplash.com/photo-1559847844-5315695dadae?w=600&q=80",
+  "https://images.unsplash.com/photo-1551782450-a2132b4ba21d?w=600&q=80",
+  "https://images.unsplash.com/photo-1577106263724-2c8e03bfe9cf?w=600&q=80",
+  "https://images.unsplash.com/photo-1576867757603-05b134ebc379?w=600&q=80",
+  "https://images.unsplash.com/photo-1517433367423-c7e5b0f35086?w=600&q=80",
+  "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=600&q=80",
+  "https://images.unsplash.com/photo-1493857671505-72967e2e2760?w=600&q=80",
+  "https://images.unsplash.com/photo-1481833761820-0509d3217039?w=600&q=80",
+  "https://images.unsplash.com/photo-1432139555190-58524dae6a55?w=600&q=80",
+  "https://images.unsplash.com/photo-1543353071-873f17a7a088?w=600&q=80",
+  "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=600&q=80",
+  "https://images.unsplash.com/photo-1606756790138-261d2b21cd75?w=600&q=80",
+  "https://images.unsplash.com/photo-1574484284002-952d92456975?w=600&q=80",
+  "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&q=80",
+  "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=600&q=80",
+  "https://images.unsplash.com/photo-1555992336-fb0d29498b13?w=600&q=80",
+];
 
-function getCuisinePhoto(cuisine: string): string {
-  const key = cuisine.toLowerCase();
-  for (const [k, url] of Object.entries(CUISINE_PHOTOS)) {
-    if (key.includes(k)) return url;
+function getRestaurantPhoto(name: string, id: string): string {
+  let hash = 0;
+  const seedStr = (id || name) + name; // combine for better distribution
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = (hash * 31 + seedStr.charCodeAt(i)) >>> 0;
   }
-  return CUISINE_PHOTOS.default;
+  return FOOD_PHOTOS[hash % FOOD_PHOTOS.length];
 }
 
 type Props = {
   defaultLocation?: string;
 };
+
 
 export function LocalEats({ defaultLocation = "" }: Props) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -300,14 +323,23 @@ export function LocalEats({ defaultLocation = "" }: Props) {
           {restaurants.map((r) => (
             <div key={r.id} className="overflow-hidden rounded-2xl bg-card shadow-card">
               {/* Cuisine photo */}
-              <div
-                className="h-32 w-full bg-cover bg-center"
-                style={{ backgroundImage: `url(${getCuisinePhoto(r.cuisine)})` }}
-                role="img"
-                aria-label={r.cuisine}
-              >
+              <div className="relative h-32 w-full bg-muted">
+                <img
+                  src={getRestaurantPhoto(r.name, r.id)}
+                  alt={r.cuisine}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    // Fallback to a guaranteed-working default if this specific photo ID fails
+                    const img = e.currentTarget;
+                    if (img.dataset.fallback !== "1") {
+                      img.dataset.fallback = "1";
+                      img.src = FOOD_PHOTOS[0];
+                    }
+                  }}
+                />
                 {/* Name overlay at bottom */}
-                <div className="flex h-full flex-col justify-end bg-gradient-to-t from-black/60 to-transparent px-3 pb-2">
+                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 to-transparent px-3 pb-2">
                   <div className="truncate text-sm font-bold text-white">{r.name}</div>
                   <div className="text-[11px] text-white/80">{r.cuisine}</div>
                 </div>

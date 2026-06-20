@@ -3,6 +3,7 @@ import { Plus, X, Upload, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { fetchGeminiKey } from "@/lib/dashboard-api";
 
 type Kind = "flight" | "hotel" | "train";
 
@@ -58,8 +59,18 @@ export function AddBookingButton() {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch Gemini key from localStorage (set via Settings modal in TopBar)
+  // Fetch Gemini key — checks localStorage cache first, falls back to Config sheet (shared across all users)
   const getApiKey = () => localStorage.getItem("gemini_api_key") || "";
+
+  // Pre-fetch the shared key from Config sheet when the dialog opens, so every user
+  // gets it automatically without manual entry.
+  useEffect(() => {
+    if (open && !getApiKey()) {
+      fetchGeminiKey().catch(() => {
+        // Silent fail — error surfaces naturally when user tries to upload
+      });
+    }
+  }, [open]);
 
   const reset = useCallback(() => {
     setFields(null);
@@ -128,8 +139,17 @@ export function AddBookingButton() {
 
   const handleFile = async (file: File) => {
     reset();
-    if (!getApiKey()) {
-      setError("Gemini API key not set. Use the ⚙️ Settings icon in the top bar to add it.");
+    let key = getApiKey();
+    if (!key) {
+      // Try fetching from Config sheet one more time before giving up
+      try {
+        key = await fetchGeminiKey();
+      } catch {
+        // ignore, handled below
+      }
+    }
+    if (!key) {
+      setError("Could not load the shared Gemini API key. Please ask your System Manager to set it in Settings.");
       return;
     }
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
