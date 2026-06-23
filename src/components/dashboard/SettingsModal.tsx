@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { saveGeminiKey, getCachedGeminiKey, WEB_APP_URL } from "@/lib/dashboard-api";
+import { useEffect, useState } from "react";
+import { saveGeminiKey, fetchGeminiKey, WEB_APP_URL } from "@/lib/dashboard-api";
 import type { SessionUser } from "@/lib/auth";
 import { sha256Hex } from "@/lib/auth";
 
@@ -25,7 +25,31 @@ export function SettingsModal({ user, onClose }: Props) {
   const [hashing, setHashing] = useState(false);
   const [hashResult, setHashResult] = useState<string | null>(null);
 
-  const currentKey = getCachedGeminiKey();
+  // Gemini key — fetched from the shared Config sheet on mount, not just localStorage.
+  // This is what fixes the "asks me to re-enter on a new device" bug: previously this
+  // modal only read the local cache and never checked the sheet itself.
+  const [currentKey, setCurrentKey] = useState<string>("");
+  const [keyLoading, setKeyLoading] = useState(true);
+  const [keyLoadError, setKeyLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setKeyLoading(true);
+    setKeyLoadError(null);
+    fetchGeminiKey()
+      .then((key) => {
+        if (!cancelled) setCurrentKey(key);
+      })
+      .catch((err) => {
+        if (!cancelled) setKeyLoadError((err as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setKeyLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -33,6 +57,7 @@ export function SettingsModal({ user, onClose }: Props) {
     setSaving(true); setError(null);
     try {
       await saveGeminiKey(newKey.trim());
+      setCurrentKey(newKey.trim());
       setSuccess(true);
       setEditing(false);
       setNewKey("");
@@ -97,7 +122,13 @@ export function SettingsModal({ user, onClose }: Props) {
           <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Gemini API Key
           </p>
-          <p className="font-mono text-sm text-foreground">{maskKey(currentKey)}</p>
+          {keyLoading ? (
+            <p className="text-sm text-muted-foreground">Checking shared key…</p>
+          ) : keyLoadError ? (
+            <p className="text-sm text-destructive">Could not check shared key: {keyLoadError}</p>
+          ) : (
+            <p className="font-mono text-sm text-foreground">{maskKey(currentKey)}</p>
+          )}
           {success && <p className="mt-1 text-xs text-green-600">Key saved successfully!</p>}
         </div>
 
