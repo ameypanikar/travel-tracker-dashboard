@@ -114,6 +114,7 @@ function Index() {
                 flights={data.flights}
                 hotels={data.hotels}
                 trains={data.trains ?? []}
+                events={data.events ?? []}
                 selectedDate={selectedDate}
                 onDateChange={setSelectedDate}
               />
@@ -123,6 +124,7 @@ function Index() {
                 flights={data.flights}
                 hotels={data.hotels}
                 trains={data.trains ?? []}
+                events={data.events ?? []}
               />
             )}
             {tab === "uber" && (

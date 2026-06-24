@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import type { Flight, Hotel, Train } from "@/lib/dashboard-api";
+import type { Flight, Hotel, Train, TravelEvent } from "@/lib/dashboard-api";
 import { startOfDay, isSameDay, addDays, formatDayLabel } from "@/lib/date-utils";
 import { FlightCard } from "./FlightCard";
 import { HotelCard } from "./HotelCard";
 import { TrainCard } from "./TrainCard";
 import { EmptyState } from "./EmptyState";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, CalendarCheck, ChevronDown, MapPin, Users } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -16,8 +16,16 @@ type Props = {
   flights: Flight[];
   hotels: Hotel[];
   trains?: Train[];
+  events?: TravelEvent[];
   selectedDate: Date | null;
   onDateChange: (d: Date | null) => void;
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  "Stall Holder": "bg-green-100 text-green-700",
+  "Visitor":      "bg-blue-100 text-blue-700",
+  "Organiser":    "bg-orange-100 text-orange-700",
+  "Sponsor":      "bg-purple-100 text-purple-700",
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -29,34 +37,127 @@ const toISO = (ddmmyyyy?: string): string => {
   return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 };
 
-export function DailyItinerary({ flights, hotels, trains = [], selectedDate, onDateChange }: Props) {
+const getAssignees = (r: Record<string, string>): string[] =>
+  (r.assignedto || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+function EventBanner({ ev }: { ev: TravelEvent }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-2xl bg-card shadow-card">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
+      >
+        <CalendarCheck className="h-4 w-4 shrink-0 text-accent" />
+        <span className="flex-1 truncate text-sm font-semibold text-foreground">
+          {ev.eventname}
+        </span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">
+          {ev.startdate}{ev.enddate && ev.enddate !== ev.startdate ? ` – ${ev.enddate}` : ""}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+            expanded && "rotate-180",
+          )}
+        />
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border px-4 py-3">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${ROLE_COLORS[ev.ourrole] ?? "bg-muted text-muted-foreground"}`}>
+              {ev.ourrole || "—"}
+            </span>
+            {ev.type && <span className="text-[11px] text-muted-foreground">📋 {ev.type}</span>}
+          </div>
+          {ev.location && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin className="h-3 w-3" />
+              <span>{ev.location}</span>
+            </div>
+          )}
+          {ev.notes && (
+            <div className="mt-1 text-xs text-muted-foreground">📝 {ev.notes}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DailyItinerary({
+  flights,
+  hotels,
+  trains = [],
+  events = [],
+  selectedDate,
+  onDateChange,
+}: Props) {
   const today = startOfDay(new Date());
   const selected = selectedDate ?? today;
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
 
   const stripStart = addDays(selected, -3);
   const strip = Array.from({ length: 14 }, (_, i) => addDays(stripStart, i));
 
-  const { matchedFlights, matchedHotels, matchedTrains } = useMemo(() => {
+  // Role-filtered, but NOT yet person-filtered — used to build the pill list
+  // so the available people reflect what this user can see, not the raw sheet.
+  const visFlights = useMemo(
+    () => filterByRole(flights as unknown as Record<string, unknown>[]) as unknown as Flight[],
+    [flights],
+  );
+  const visHotels = useMemo(
+    () => filterByRole(hotels as unknown as Record<string, unknown>[]) as unknown as Hotel[],
+    [hotels],
+  );
+  const visTrains = useMemo(
+    () => filterByRole(trains as unknown as Record<string, unknown>[]) as unknown as Train[],
+    [trains],
+  );
+
+  const allAssignees = useMemo(() => {
+    const set = new Set<string>();
+    [...visFlights, ...visHotels, ...visTrains].forEach((item) => {
+      getAssignees(item as unknown as Record<string, string>).forEach((name) => set.add(name));
+    });
+    return Array.from(set).sort();
+  }, [visFlights, visHotels, visTrains]);
+
+  const { matchedFlights, matchedHotels, matchedTrains, matchedEvents } = useMemo(() => {
     const ymd = toYMD(selected);
-    const visFlights = filterByRole(flights as unknown as Record<string, unknown>[]) as unknown as Flight[];
-    const visHotels = filterByRole(hotels as unknown as Record<string, unknown>[]) as unknown as Hotel[];
-    const visTrains = filterByRole(trains as unknown as Record<string, unknown>[]) as unknown as Train[];
-    const mf = visFlights.filter((f) => (f as unknown as Record<string, string>).isoDate === ymd);
-    const mh = visHotels.filter((h) => {
+    const personFiltered = <T,>(items: T[]) =>
+      assignedFilter === "all"
+        ? items
+        : items.filter((it) => getAssignees(it as unknown as Record<string, string>).includes(assignedFilter));
+
+    const mf = personFiltered(visFlights).filter(
+      (f) => (f as unknown as Record<string, string>).isoDate === ymd,
+    );
+    const mh = personFiltered(visHotels).filter((h) => {
       const r = h as unknown as Record<string, string>;
       const start = toISO(r.checkindate);
       const end = toISO(r.checkoutdate) || start;
       if (!start) return false;
       return ymd >= start && ymd <= end;
     });
-    const mt = visTrains.filter((t) => toISO((t as unknown as Record<string, string>).departuredate) === ymd);
-    return { matchedFlights: mf, matchedHotels: mh, matchedTrains: mt };
-  }, [flights, hotels, trains, selected]);
+    const mt = personFiltered(visTrains).filter(
+      (t) => toISO((t as unknown as Record<string, string>).departuredate) === ymd,
+    );
+    // Events: no assigned_to, never filtered by person, always shown.
+    const me = events.filter((ev) => {
+      const start = ev.startdate;
+      const end = ev.enddate || start;
+      if (!start) return false;
+      return ymd >= start && ymd <= end;
+    });
+    return { matchedFlights: mf, matchedHotels: mh, matchedTrains: mt, matchedEvents: me };
+  }, [visFlights, visHotels, visTrains, events, selected, assignedFilter]);
 
-
-  const total = matchedFlights.length + matchedHotels.length + matchedTrains.length;
+  const total = matchedFlights.length + matchedHotels.length + matchedTrains.length + matchedEvents.length;
   const setDate = (d: Date) => onDateChange(startOfDay(d));
+  const [filterOpen, setFilterOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
@@ -140,13 +241,58 @@ export function DailyItinerary({ flights, hotels, trains = [], selectedDate, onD
         </div>
       </div>
 
+      {/* Per-user filter — collapsible, applies to flights/hotels/trains only; events always show */}
+      {allAssignees.length > 0 && (
+        <div className="mb-1">
+          <button
+            onClick={() => setFilterOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/10"
+          >
+            <Users className="h-3.5 w-3.5" />
+            {assignedFilter === "all" ? "Filter by person" : `Showing: ${assignedFilter}`}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", filterOpen && "rotate-180")} />
+          </button>
+
+          {filterOpen && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setAssignedFilter("all")}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                  assignedFilter === "all"
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent-soft"
+                }`}
+              >
+                All
+              </button>
+              {allAssignees.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => setAssignedFilter(name)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                    assignedFilter === name
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent-soft"
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {total === 0 ? (
         <EmptyState
           title="Nothing on this day"
-          message="No flights, trains, or hotel stays scheduled."
+          message="No flights, trains, hotel stays, or events scheduled."
         />
       ) : (
         <div className="flex flex-col gap-3">
+          {matchedEvents.map((ev, i) => (
+            <EventBanner key={`event-${ev.eventname}-${ev.startdate}-${i}`} ev={ev} />
+          ))}
           {matchedFlights.map((f) => (
             <FlightCard
               key={(f as unknown as Record<string, string>).confirmationcode}

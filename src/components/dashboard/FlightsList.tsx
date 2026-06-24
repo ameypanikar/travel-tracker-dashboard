@@ -3,6 +3,8 @@ import type { Flight } from "@/lib/dashboard-api";
 import { FlightCard } from "./FlightCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
+import { Users, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -21,6 +23,7 @@ export function FlightsList({
   selectedDate?: Date | null;
 }) {
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const visible = filterByRole(
     flights as unknown as Record<string, unknown>[],
@@ -79,32 +82,45 @@ export function FlightsList({
 
   return (
     <div>
-      {/* Assignee filter */}
+      {/* Assignee filter — collapsible */}
       {allAssignees.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
+        <div className="mb-3">
           <button
-            onClick={() => setAssignedFilter("all")}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-              assignedFilter === "all"
-                ? "bg-accent text-accent-foreground"
-                : "bg-muted text-muted-foreground hover:bg-accent-soft"
-            }`}
+            onClick={() => setFilterOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/10"
           >
-            All
+            <Users className="h-3.5 w-3.5" />
+            {assignedFilter === "all" ? "Filter by person" : `Showing: ${assignedFilter}`}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", filterOpen && "rotate-180")} />
           </button>
-          {allAssignees.map((name) => (
-            <button
-              key={name}
-              onClick={() => setAssignedFilter(name)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                assignedFilter === name
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent-soft"
-              }`}
-            >
-              {name}
-            </button>
-          ))}
+
+          {filterOpen && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setAssignedFilter("all")}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                  assignedFilter === "all"
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent-soft"
+                }`}
+              >
+                All
+              </button>
+              {allAssignees.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => setAssignedFilter(name)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                    assignedFilter === name
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent-soft"
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
