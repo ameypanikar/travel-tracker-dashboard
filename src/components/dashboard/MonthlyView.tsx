@@ -213,7 +213,7 @@ export function MonthlyView({
               {/* Event marker — top-right corner */}
               {ev.events.length > 0 && (
                 <CalendarCheck
-                  className="absolute right-1 top-1 h-3.5 w-3.5 text-amber-600/70"
+                  className="absolute right-1 top-1 h-3.5 w-3.5 text-red-600"
                   aria-label="event"
                 />
               )}
@@ -225,10 +225,10 @@ export function MonthlyView({
               {/* Color-coded type icons — bottom row */}
               <div className="mt-auto flex items-center gap-1">
                 {ev.flights.length > 0 && (
-                  <Plane className="h-4 w-4 text-sky-700/60" aria-label="flight" />
+                  <Plane className="h-4 w-4 text-blue-700" aria-label="flight" />
                 )}
                 {ev.hotels.length > 0 && (
-                  <HotelIcon className="h-4 w-4 text-emerald-700/60" aria-label="hotel" />
+                  <HotelIcon className="h-4 w-4 text-green-700" aria-label="hotel" />
                 )}
                 {ev.trains.length > 0 && (
                   <TrainFront className="h-4 w-4 text-foreground/70" aria-label="train" />
