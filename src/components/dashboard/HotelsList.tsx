@@ -3,6 +3,8 @@ import type { Hotel } from "@/lib/dashboard-api";
 import { HotelCard } from "./HotelCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
+import { Users, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toYMD = (d: Date) =>
@@ -22,6 +24,7 @@ export function HotelsList({
   selectedDate?: Date | null;
 }) {
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const visible = filterByRole(
     hotels as unknown as Record<string, unknown>[],
@@ -78,14 +81,12 @@ export function HotelsList({
   const totalRooms = filtered.reduce((sum, h) => {
     const r = h as unknown as Record<string, string>;
     const n = parseInt(r.numberofrooms || "0", 10);
-    // Fall back to counting comma-separated room assignments
     const assignmentCount = r.roomassignments
       ? r.roomassignments.split(",").filter(Boolean).length
       : 0;
     return sum + (n || assignmentCount || 1);
   }, 0);
 
-  // Group by city
   const cityMap: Record<string, number> = {};
   filtered.forEach((h) => {
     const r = h as unknown as Record<string, string>;
@@ -112,34 +113,48 @@ export function HotelsList({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Assignee filter */}
+      {/* Assignee filter — collapsible */}
       {allAssignees.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div>
           <button
-            onClick={() => setAssignedFilter("all")}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-              assignedFilter === "all"
-                ? "bg-accent text-accent-foreground"
-                : "bg-muted text-muted-foreground hover:bg-accent-soft"
-            }`}
+            onClick={() => setFilterOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/10"
           >
-            All
+            <Users className="h-3.5 w-3.5" />
+            {assignedFilter === "all" ? "Filter by person" : `Showing: ${assignedFilter}`}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", filterOpen && "rotate-180")} />
           </button>
-          {allAssignees.map((name) => (
-            <button
-              key={name}
-              onClick={() => setAssignedFilter(name)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                assignedFilter === name
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent-soft"
-              }`}
-            >
-              {name}
-            </button>
-          ))}
+
+          {filterOpen && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setAssignedFilter("all")}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                  assignedFilter === "all"
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent-soft"
+                }`}
+              >
+                All
+              </button>
+              {allAssignees.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => setAssignedFilter(name)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
+                    assignedFilter === name
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent-soft"
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
+
       {/* Summary banner */}
       <div className="rounded-2xl bg-card px-4 py-3 shadow-card">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold">
