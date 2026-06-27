@@ -4,6 +4,7 @@ import { HotelCard } from "./HotelCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
 import { Users, ChevronDown } from "lucide-react";
+import type { Document } from "@/lib/dashboard-api";
 import { cn } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -19,9 +20,11 @@ const toISO = (ddmmyyyy?: string): string => {
 export function HotelsList({
   hotels,
   selectedDate,
+  documents = [],
 }: {
   hotels: Hotel[];
   selectedDate?: Date | null;
+  documents?: Document[];
 }) {
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -173,15 +176,19 @@ export function HotelsList({
         </div>
       </div>
 
-      {ordered.map((h) => {
+      {ordered.map((h, idx) => {
         const r = h as unknown as Record<string, string>;
         const checkout = toISO(r.checkoutdate) || toISO(r.checkindate);
         const isPast = checkout < todayYMD;
         return (
           <HotelCard
-            key={r.confirmationcode}
+            key={
+              r.confirmationcode ||
+              `${r.hotelname || "hotel"}-${r.checkindate || "?"}-${r.checkoutdate || "?"}-${idx}`
+            }
             hotel={h}
             isPast={isPast}
+            documents={documents}
           />
         );
       })}

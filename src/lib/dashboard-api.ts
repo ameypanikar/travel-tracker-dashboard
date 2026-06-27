@@ -70,6 +70,7 @@ export type DashboardData = {
   trains: Train[];
   events: TravelEvent[];
   pending: PendingItem[];
+  documents: Document[];
   updatedAt: string;
   error?: string;
 };
@@ -139,4 +140,53 @@ export async function appendEvent(fields: {
   if (!res.ok) throw new Error("Could not save event");
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || "Failed to save event");
+}
+
+export type Document = {
+  type: "flight" | "hotel";
+  category: "ticket" | "boardingpass" | "confirmation";
+  confirmationcode: string;
+  passengername: string;
+  fileurl: string;
+  uploadedat: string;
+};
+
+// ── Document upload (tickets, boarding passes, hotel confirmations) ──────────
+export async function uploadDocument(params: {
+  type: "flight" | "hotel";
+  category: "ticket" | "boardingpass" | "confirmation";
+  confirmationCode: string;
+  passengerName?: string;
+  file: File;
+}): Promise<string> {
+  const { type, category, confirmationCode, passengerName, file } = params;
+
+  const base64Data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.includes(",") ? result.split(",")[1] : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  const res = await fetch(WEB_APP_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "uploadDocument",
+      type,
+      category,
+      confirmationCode,
+      passengerName: passengerName || "",
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      base64Data,
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "Upload failed");
+  return json.fileUrl as string;
 }

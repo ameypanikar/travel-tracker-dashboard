@@ -98,10 +98,18 @@ function Index() {
         {data && !isLoading && (
           <>
             {tab === "flights" && (
-              <FlightsList flights={data.flights} selectedDate={selectedDate} />
+              <FlightsList
+                flights={data.flights}
+                selectedDate={selectedDate}
+                documents={data.documents ?? []}
+              />
             )}
             {tab === "hotels" && (
-              <HotelsList hotels={data.hotels} selectedDate={selectedDate} />
+              <HotelsList
+                hotels={data.hotels}
+                selectedDate={selectedDate}
+                documents={data.documents ?? []}
+              />
             )}
             {tab === "trains" && (
               <TrainsList

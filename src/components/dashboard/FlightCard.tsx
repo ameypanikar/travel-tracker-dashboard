@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import type { Flight } from "@/lib/dashboard-api";
-import { ExternalLink } from "lucide-react";
+import type { Flight, Document } from "@/lib/dashboard-api";
+import { uploadDocument } from "@/lib/dashboard-api";
+import { ExternalLink, FileText, Ticket, Upload, Loader2, X } from "lucide-react";
 import { formatTime } from "@/lib/date-utils";
+import { getSessionUser } from "@/lib/auth";
+import { isAssignedToMe } from "@/lib/role-filter";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 function parseDateTime(date: string, time: string): Date | null {
   if (!date || !time) return null;
@@ -38,26 +42,69 @@ function bezierAngle(t: number, x0: number, y0: number, cx: number, cy: number, 
 function PlaneShape({ color }: { color: string }) {
   return (
     <g>
-      {/* Fuselage */}
       <ellipse cx="0" cy="0" rx="9" ry="2.5" fill={color} />
-      {/* Nose cone */}
       <ellipse cx="9" cy="0" rx="3.5" ry="1.8" fill={color} />
-      {/* Main wings — swept back */}
       <polygon points="2,-1 -4,-12 -8,-12 -3,-1" fill={color} />
       <polygon points="2,1 -4,12 -8,12 -3,1" fill={color} />
-      {/* Engine pods on wings */}
       <ellipse cx="-3.5" cy="-8" rx="3" ry="1.2" fill={color} />
       <ellipse cx="-3.5" cy="8" rx="3" ry="1.2" fill={color} />
-      {/* Tail fins */}
       <polygon points="-7,-1 -12,-5 -12,-2 -7,-1" fill={color} />
       <polygon points="-7,1 -12,5 -12,2 -7,1" fill={color} />
-      {/* Tail vertical fin */}
       <ellipse cx="-9" cy="0" rx="2.5" ry="1" fill={color} />
     </g>
   );
 }
 
-export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?: boolean }) {
+// Extracts the Drive file ID from our stored "https://drive.google.com/uc?id=XXXX" URL
+// and builds an embeddable preview link that works for both images and PDFs.
+function toPreviewUrl(fileUrl: string): string {
+  try {
+    const u = new URL(fileUrl);
+    const id = u.searchParams.get("id");
+    if (id) return `https://drive.google.com/file/d/${id}/preview`;
+  } catch {
+    // fall through
+  }
+  return fileUrl;
+}
+
+function DocumentViewerDialog({
+  title,
+  fileUrl,
+  onClose,
+}: {
+  title: string;
+  fileUrl: string;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl p-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="text-sm font-bold">{title}</div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <iframe
+          src={toPreviewUrl(fileUrl)}
+          className="h-[70vh] w-full"
+          title={title}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function FlightCard({
+  flight,
+  isPast = false,
+  documents = [],
+}: {
+  flight: Flight;
+  isPast?: boolean;
+  documents?: Document[];
+}) {
   const f = flight as unknown as Record<string, string>;
   const status = (f.bookingstatus || "").toUpperCase();
   const depDate = parseDateTime(f.departuredate, f.departuretime);
@@ -76,7 +123,6 @@ export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?
   const hasLanded = !!(arrDate && Date.now() > arrDate.getTime());
   const planeColor = isInFlight ? "#3B82F6" : hasLanded ? "#94A3B8" : "#CBD5E1";
 
-  // SVG arc — same proportions as original card middle section
   const W = 160, H = 48;
   const x0 = 8, y0 = H - 10;
   const x1 = W - 8, y1 = H - 10;
@@ -84,6 +130,50 @@ export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?
 
   const planePos = bezierPoint(progress, x0, y0, cx, cy, x1, y1);
   const planeAngle = bezierAngle(progress, x0, y0, cx, cy, x1, y1);
+
+  // ── Documents: ticket (shared) + boarding pass (per-person) ──────────────
+  const user = getSessionUser();
+  const userName = user?.name || "";
+  const isMine = isAssignedToMe(f.assignedto, userName);
+
+  const ticketDoc = documents.find(
+    (d) => d.type === "flight" && d.category === "ticket" && d.confirmationcode === f.confirmationcode,
+  );
+  const existingBoardingPass = documents.find(
+    (d) =>
+      d.type === "flight" &&
+      d.category === "boardingpass" &&
+      d.confirmationcode === f.confirmationcode &&
+      d.passengername.trim().toLowerCase() === userName.trim().toLowerCase(),
+  );
+
+  // Locally tracks a just-uploaded boarding pass so the button updates immediately,
+  // without needing to wait for the next full data refresh.
+  const [localBoardingPassUrl, setLocalBoardingPassUrl] = useState<string | null>(null);
+  const boardingPassUrl = localBoardingPassUrl || existingBoardingPass?.fileurl || null;
+
+  const [uploadingPass, setUploadingPass] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [viewerDoc, setViewerDoc] = useState<{ title: string; url: string } | null>(null);
+
+  const handleBoardingPassUpload = async (file: File) => {
+    setUploadingPass(true);
+    setUploadError("");
+    try {
+      const url = await uploadDocument({
+        type: "flight",
+        category: "boardingpass",
+        confirmationCode: f.confirmationcode,
+        passengerName: userName,
+        file,
+      });
+      setLocalBoardingPassUrl(url);
+    } catch (e) {
+      setUploadError((e as Error).message);
+    } finally {
+      setUploadingPass(false);
+    }
+  };
 
   return (
     <div
@@ -107,9 +197,8 @@ export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?
         <StatusBadge status={status} />
       </div>
 
-      {/* Route row — same layout as original */}
+      {/* Route row */}
       <div className="flex items-center gap-3">
-        {/* Departure */}
         <div className="flex-1">
           <div className="text-2xl font-bold leading-none tracking-tight">{f.from || "—"}</div>
           <div className="mt-1 text-xs text-muted-foreground">{f.cityfrom}</div>
@@ -117,7 +206,6 @@ export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?
           <div className="text-[11px] text-muted-foreground">{f.departuredate}</div>
         </div>
 
-        {/* Arc in the middle */}
         <div className="flex flex-col items-center" style={{ minWidth: 80 }}>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">
             {f.duration || ""}
@@ -129,7 +217,6 @@ export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?
             aria-hidden="true"
             overflow="visible"
           >
-            {/* Dashed arc */}
             <path
               d={`M${x0} ${y0} Q${cx} ${cy} ${x1} ${y1}`}
               stroke="#CBD5E1"
@@ -137,23 +224,17 @@ export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?
               strokeDasharray="5 4"
               fill="none"
             />
-            {/* Station dots */}
             <circle cx={x0} cy={y0} r="3" fill="#94A3B8" />
             <circle cx={x1} cy={y1} r="3" fill="#94A3B8" />
-
-            {/* Plane — scaled down, anchor at center, rotated along arc tangent */}
             <g transform={`translate(${planePos.x}, ${planePos.y}) rotate(${planeAngle}) scale(0.7)`}>
               <PlaneShape color={planeColor} />
             </g>
-
-            {/* Status label — only for in-flight, landed shown by grey color */}
             {isInFlight && (
               <text x={cx} y={cy - 2} textAnchor="middle" fontSize="9" fill="#3B82F6" fontWeight="600">✈ Flying</text>
             )}
           </svg>
         </div>
 
-        {/* Arrival */}
         <div className="flex-1 text-right">
           <div className="text-2xl font-bold leading-none tracking-tight">{f.to || "—"}</div>
           <div className="mt-1 text-xs text-muted-foreground">{f.cityto}</div>
@@ -180,6 +261,62 @@ export function FlightCard({ flight, isPast = false }: { flight: Flight; isPast?
             <div className="text-[11px] text-muted-foreground">👤 {f.assignedto}</div>
           )}
         </div>
+      )}
+
+      {/* Documents row — ticket (shared) + boarding pass (per-person) */}
+      {(ticketDoc || isMine) && (
+        <div className="mt-2 flex flex-wrap gap-2 border-t border-border pt-2">
+          {ticketDoc && (
+            <button
+              onClick={() => setViewerDoc({ title: "Ticket", url: ticketDoc.fileurl })}
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10"
+            >
+              <FileText className="h-3 w-3" /> View ticket
+            </button>
+          )}
+
+          {isMine && boardingPassUrl && (
+            <button
+              onClick={() => setViewerDoc({ title: "My boarding pass", url: boardingPassUrl })}
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10"
+            >
+              <Ticket className="h-3 w-3" /> View my boarding pass
+            </button>
+          )}
+
+          {isMine && !boardingPassUrl && (
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted/80">
+              {uploadingPass ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Upload className="h-3 w-3" />
+              )}
+              {uploadingPass ? "Uploading…" : "Upload my boarding pass"}
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                className="hidden"
+                disabled={uploadingPass}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleBoardingPassUpload(file);
+                }}
+              />
+            </label>
+          )}
+        </div>
+      )}
+
+      {uploadError && (
+        <div className="mt-2 text-[11px] text-destructive">{uploadError}</div>
+      )}
+
+      {viewerDoc && (
+        <DocumentViewerDialog
+          title={viewerDoc.title}
+          fileUrl={viewerDoc.url}
+          onClose={() => setViewerDoc(null)}
+        />
       )}
     </div>
   );

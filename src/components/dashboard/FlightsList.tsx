@@ -4,6 +4,8 @@ import { FlightCard } from "./FlightCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
 import { Users, ChevronDown } from "lucide-react";
+import type { Document } from "@/lib/dashboard-api";
+
 import { cn } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -18,9 +20,11 @@ const toISO = (ddmmyyyy?: string): string => {
 export function FlightsList({
   flights,
   selectedDate,
+  documents = [],
 }: {
   flights: Flight[];
   selectedDate?: Date | null;
+  documents?: Document[];
 }) {
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -143,6 +147,7 @@ export function FlightsList({
                 key={r.confirmationcode}
                 flight={f}
                 isPast={isPast}
+                documents={documents}
               />
             );
           })}

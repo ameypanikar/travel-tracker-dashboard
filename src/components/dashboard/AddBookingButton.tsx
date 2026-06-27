@@ -3,7 +3,7 @@ import { Plus, X, Upload, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { fetchGeminiKey } from "@/lib/dashboard-api";
+import { fetchGeminiKey, uploadDocument } from "@/lib/dashboard-api";
 
 type Kind = "flight" | "hotel" | "train";
 
@@ -59,6 +59,12 @@ export function AddBookingButton() {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ── Document attach state (boarding pass / hotel confirmation) ──────────
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentPassenger, setDocumentPassenger] = useState<string>("");
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [docUploadError, setDocUploadError] = useState<string>("");
+
   // Fetch Gemini key — checks localStorage cache first, falls back to Config sheet (shared across all users)
   const getApiKey = () => localStorage.getItem("gemini_api_key") || "";
 
@@ -77,6 +83,9 @@ export function AddBookingButton() {
     setError("");
     setStatus("");
     setLoading(false);
+    setDocumentFile(null);
+    setDocumentPassenger("");
+    setDocUploadError("");
     if (inputRef.current) inputRef.current.value = "";
   }, []);
 
@@ -183,6 +192,13 @@ export function AddBookingButton() {
     if (file) handleFile(file);
   };
 
+  // Names extracted into the assigned_to field for this booking — used to build
+  // the "whose boarding pass is this" picker for flights.
+  const assignedNames = (fields?.assigned_to || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const onSave = async () => {
     if (!fields) return;
     setSaving(true);
@@ -190,6 +206,34 @@ export function AddBookingButton() {
       const payload = encodeURIComponent(JSON.stringify({ kind, fields }));
       const res = await fetch(`${SHEET_URL}?action=append&payload=${payload}`, { redirect: "follow" });
       if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "Save failed");
+
+      // Booking saved successfully — now attach the document, if one was provided.
+      // This runs after the save so we always have a confirmed confirmation_code
+      // to tie the document to, and so a document-upload failure never costs the booking.
+      if (documentFile && fields.confirmation_code) {
+        setUploadingDoc(true);
+        setDocUploadError("");
+        try {
+          await uploadDocument({
+            type: kind === "flight" ? "flight" : "hotel",
+            category: kind === "flight" ? "ticket" : "confirmation",
+            confirmationCode: fields.confirmation_code,
+            passengerName: kind === "flight" ? documentPassenger : undefined,
+            file: documentFile,
+          });
+        } catch (docErr) {
+          setDocUploadError(
+            `Booking saved, but the document upload failed: ${(docErr as Error).message}`,
+          );
+          setUploadingDoc(false);
+          setSaving(false);
+          return;
+        }
+        setUploadingDoc(false);
+      }
+
       toast.success("✅ Booking added to sheet!");
       reset();
       setOpen(false);
@@ -201,6 +245,9 @@ export function AddBookingButton() {
   };
 
   const keys = KEYS[kind];
+  const canAttachDocument = kind === "flight" || kind === "hotel";
+  const flightNeedsPassengerPick =
+    kind === "flight" && !!documentFile && assignedNames.length > 0 && !documentPassenger;
 
   return (
     <>
@@ -310,6 +357,64 @@ export function AddBookingButton() {
               </div>
             )}
 
+            {/* ── Document attach section (boarding pass / hotel confirmation) ── */}
+            {fields && canAttachDocument && (
+              <div className="rounded-lg border p-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  {kind === "flight" ? "Boarding pass (optional)" : "Booking confirmation PDF (optional)"}
+                </div>
+
+                {kind === "flight" && assignedNames.length > 0 && (
+                  <div className="mb-2">
+                    <label className="mb-1 block text-[11px] text-muted-foreground">
+                      Whose boarding pass is this?
+                    </label>
+                    <select
+                      value={documentPassenger}
+                      onChange={(e) => setDocumentPassenger(e.target.value)}
+                      className="w-full rounded-lg border bg-background px-2 py-1.5 text-xs"
+                    >
+                      <option value="">Select passenger…</option>
+                      {assignedNames.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={(e) => setDocumentFile(e.target.files?.[0] ?? null)}
+                  className="w-full text-xs"
+                />
+
+                {documentFile && (
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>📎 {documentFile.name}</span>
+                    <button
+                      onClick={() => setDocumentFile(null)}
+                      className="text-destructive hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+
+                {flightNeedsPassengerPick && (
+                  <p className="mt-1.5 text-[11px] text-destructive">
+                    Select which passenger this boarding pass belongs to.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {docUploadError && (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+                {docUploadError}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 border-t pt-3">
               <button
                 onClick={reset}
@@ -319,11 +424,11 @@ export function AddBookingButton() {
               </button>
               <button
                 onClick={onSave}
-                disabled={!fields || saving}
+                disabled={!fields || saving || flightNeedsPassengerPick}
                 className="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
               >
-                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                Save to Sheet
+                {(saving || uploadingDoc) ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {uploadingDoc ? "Uploading document…" : "Save to Sheet"}
               </button>
             </div>
           </div>
