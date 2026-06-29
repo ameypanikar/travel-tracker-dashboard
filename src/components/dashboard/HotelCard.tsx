@@ -43,6 +43,28 @@ function DocumentViewerDialog({
   );
 }
 
+// Parses a DD/MM/YYYY string (the format used throughout this app for dates) into a Date.
+function parseDdMmYyyy(dateStr?: string): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split("/");
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts.map((p) => parseInt(p, 10));
+  if (!dd || !mm || !yyyy) return null;
+  return new Date(yyyy, mm - 1, dd);
+}
+
+// Returns true once we're more than `graceDays` past the given reference date —
+// used to hide upload buttons once a document is unlikely to ever be needed again.
+// If the reference date can't be parsed, we default to NOT blocking uploads.
+function isUploadWindowClosed(referenceDateStr?: string, graceDays = 3): boolean {
+  const ref = parseDdMmYyyy(referenceDateStr);
+  if (!ref) return false;
+  const cutoff = new Date(ref);
+  cutoff.setDate(cutoff.getDate() + graceDays);
+  cutoff.setHours(23, 59, 59, 999);
+  return Date.now() > cutoff.getTime();
+}
+
 export function HotelCard({
   hotel,
   isPast = false,
@@ -69,6 +91,9 @@ export function HotelCard({
   // without needing to wait for the next full data refresh.
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null);
   const fileUrl = localFileUrl || existingConfirmationDoc?.fileurl || null;
+
+  // Upload window closes 3 days after checkout — viewing stays available regardless.
+  const uploadWindowClosed = isUploadWindowClosed(h.checkoutdate);
 
   const [viewerOpen, setViewerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -205,36 +230,40 @@ export function HotelCard({
         </div>
       )}
 
-      {/* Document row — view if one exists, otherwise offer to attach one */}
-      <div className="mt-2 flex flex-wrap gap-2 border-t border-border pt-2">
-        {fileUrl ? (
-          <button
-            onClick={() => setViewerOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10"
-          >
-            <FileText className="h-3 w-3" /> View booking confirmation
-          </button>
-        ) : (
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted/80">
-            {uploading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Upload className="h-3 w-3" />
-            )}
-            {uploading ? "Uploading…" : "Attach confirmation PDF"}
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
-              className="hidden"
-              disabled={uploading}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUpload(file);
-              }}
-            />
-          </label>
-        )}
-      </div>
+      {/* Document row — view if one exists (always); offer to attach only if window's open */}
+      {(fileUrl || !uploadWindowClosed) && (
+        <div className="mt-2 flex flex-wrap gap-2 border-t border-border pt-2">
+          {fileUrl ? (
+            <button
+              onClick={() => setViewerOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10"
+            >
+              <FileText className="h-3 w-3" /> View booking confirmation
+            </button>
+          ) : (
+            !uploadWindowClosed && (
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted/80">
+                {uploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )}
+                {uploading ? "Uploading…" : "Attach confirmation PDF"}
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUpload(file);
+                  }}
+                />
+              </label>
+            )
+          )}
+        </div>
+      )}
 
       {uploadError && (
         <div className="mt-1.5 text-[11px] text-destructive">{uploadError}</div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Flight, Document } from "@/lib/dashboard-api";
 import { uploadDocument } from "@/lib/dashboard-api";
-import { ExternalLink, FileText, Ticket, Upload, Loader2, X } from "lucide-react";
+import { ExternalLink, FileText, Ticket, Upload, Loader2, X, CheckCircle2 } from "lucide-react";
 import { formatTime } from "@/lib/date-utils";
 import { getSessionUser } from "@/lib/auth";
 import { isAssignedToMe } from "@/lib/role-filter";
@@ -96,6 +96,30 @@ function DocumentViewerDialog({
   );
 }
 
+const namesMatch = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// Parses a DD/MM/YYYY string (the format used throughout this app for dates) into a Date.
+function parseDdMmYyyy(dateStr?: string): Date | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split("/");
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts.map((p) => parseInt(p, 10));
+  if (!dd || !mm || !yyyy) return null;
+  return new Date(yyyy, mm - 1, dd);
+}
+
+// Returns true once we're more than `graceDays` past the given reference date —
+// used to hide upload buttons once a document is unlikely to ever be needed again.
+// If the reference date can't be parsed, we default to NOT blocking uploads.
+function isUploadWindowClosed(referenceDateStr?: string, graceDays = 3): boolean {
+  const ref = parseDdMmYyyy(referenceDateStr);
+  if (!ref) return false;
+  const cutoff = new Date(ref);
+  cutoff.setDate(cutoff.getDate() + graceDays);
+  cutoff.setHours(23, 59, 59, 999);
+  return Date.now() > cutoff.getTime();
+}
+
 export function FlightCard({
   flight,
   isPast = false,
@@ -131,47 +155,73 @@ export function FlightCard({
   const planePos = bezierPoint(progress, x0, y0, cx, cy, x1, y1);
   const planeAngle = bezierAngle(progress, x0, y0, cx, cy, x1, y1);
 
-  // ── Documents: ticket (shared) + boarding pass (per-person) ──────────────
+  // Upload window closes 3 days after arrival — viewing stays available regardless.
+  const uploadWindowClosed = isUploadWindowClosed(f.arrivaldate);
+
+  // ── Documents: ticket (shared, anyone can view) + boarding pass (per-person, view-locked) ──
   const user = getSessionUser();
   const userName = user?.name || "";
   const isMine = isAssignedToMe(f.assignedto, userName);
 
-  const ticketDoc = documents.find(
-    (d) => d.type === "flight" && d.category === "ticket" && d.confirmationcode === f.confirmationcode,
-  );
-  const existingBoardingPass = documents.find(
-    (d) =>
-      d.type === "flight" &&
-      d.category === "boardingpass" &&
-      d.confirmationcode === f.confirmationcode &&
-      d.passengername.trim().toLowerCase() === userName.trim().toLowerCase(),
-  );
+  const assignedNames = (f.assignedto || "")
+    .split(/[,;/]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  // Locally tracks a just-uploaded boarding pass so the button updates immediately,
-  // without needing to wait for the next full data refresh.
-  const [localBoardingPassUrl, setLocalBoardingPassUrl] = useState<string | null>(null);
-  const boardingPassUrl = localBoardingPassUrl || existingBoardingPass?.fileurl || null;
+  // Tracks boarding passes uploaded during this session, keyed by passenger name,
+  // so the UI updates immediately without waiting for a full data refetch.
+  const [localPasses, setLocalPasses] = useState<Record<string, string>>({});
 
-  const [uploadingPass, setUploadingPass] = useState(false);
+  // Most recent ticket for this flight (anyone can view).
+  const ticketDoc = documents
+    .filter((d) => d.type === "flight" && d.category === "ticket" && d.confirmationcode === f.confirmationcode)
+    .pop();
+
+  // Look up a boarding pass for a given passenger name — checks this session's
+  // local uploads first, then falls back to the most recent matching sheet row.
+  const getBoardingPassFor = (name: string): string | null => {
+    if (localPasses[name]) return localPasses[name];
+    const match = documents
+      .filter(
+        (d) =>
+          d.type === "flight" &&
+          d.category === "boardingpass" &&
+          d.confirmationcode === f.confirmationcode &&
+          namesMatch(d.passengername, name),
+      )
+      .pop();
+    return match?.fileurl ?? null;
+  };
+
+  const myBoardingPassUrl = isMine ? getBoardingPassFor(userName) : null;
+
+  // ── Upload UI state (anyone can upload, on behalf of any assigned passenger) ──
+  const [uploadFor, setUploadFor] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [viewerDoc, setViewerDoc] = useState<{ title: string; url: string } | null>(null);
 
   const handleBoardingPassUpload = async (file: File) => {
-    setUploadingPass(true);
+    if (!uploadFor) {
+      setUploadError("Select which passenger this boarding pass belongs to.");
+      return;
+    }
+    setUploading(true);
     setUploadError("");
     try {
       const url = await uploadDocument({
         type: "flight",
         category: "boardingpass",
         confirmationCode: f.confirmationcode,
-        passengerName: userName,
+        passengerName: uploadFor,
         file,
       });
-      setLocalBoardingPassUrl(url);
+      setLocalPasses((prev) => ({ ...prev, [uploadFor]: url }));
+      setUploadFor("");
     } catch (e) {
       setUploadError((e as Error).message);
     } finally {
-      setUploadingPass(false);
+      setUploading(false);
     }
   };
 
@@ -263,8 +313,8 @@ export function FlightCard({
         </div>
       )}
 
-      {/* Documents row — ticket (shared) + boarding pass (per-person) */}
-      {(ticketDoc || isMine) && (
+      {/* Ticket + my boarding pass — always visible regardless of date */}
+      {(ticketDoc || myBoardingPassUrl) && (
         <div className="mt-2 flex flex-wrap gap-2 border-t border-border pt-2">
           {ticketDoc && (
             <button
@@ -274,41 +324,79 @@ export function FlightCard({
               <FileText className="h-3 w-3" /> View ticket
             </button>
           )}
-
-          {isMine && boardingPassUrl && (
+          {myBoardingPassUrl && (
             <button
-              onClick={() => setViewerDoc({ title: "My boarding pass", url: boardingPassUrl })}
+              onClick={() => setViewerDoc({ title: "My boarding pass", url: myBoardingPassUrl })}
               className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10"
             >
               <Ticket className="h-3 w-3" /> View my boarding pass
             </button>
           )}
+        </div>
+      )}
 
-          {isMine && !boardingPassUrl && (
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted/80">
-              {uploadingPass ? (
+      {/* Boarding pass upload — anyone can upload, on behalf of any assigned passenger.
+          Only the matching passenger will ever see a "View" button for it.
+          Hidden entirely once we're more than 3 days past arrival. */}
+      {assignedNames.length > 0 && !uploadWindowClosed && (
+        <div className="mt-2 rounded-lg border border-border bg-muted/20 p-2.5">
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+            <span className="font-bold uppercase tracking-wider">Boarding passes</span>
+            {assignedNames.map((name) => {
+              const has = !!getBoardingPassFor(name);
+              return (
+                <span key={name} className="inline-flex items-center gap-0.5">
+                  {has ? (
+                    <CheckCircle2 className="h-3 w-3 text-success" />
+                  ) : (
+                    <span className="h-3 w-3 rounded-full border border-muted-foreground/40" />
+                  )}
+                  {name}
+                </span>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={uploadFor}
+              onChange={(e) => setUploadFor(e.target.value)}
+              className="rounded-lg border bg-background px-2 py-1 text-[11px]"
+            >
+              <option value="">Upload for…</option>
+              {assignedNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+
+            <label
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                uploadFor ? "bg-accent-soft text-accent hover:bg-accent/10" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {uploading ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Upload className="h-3 w-3" />
               )}
-              {uploadingPass ? "Uploading…" : "Upload my boarding pass"}
+              {uploading ? "Uploading…" : "Upload boarding pass"}
               <input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.webp"
                 className="hidden"
-                disabled={uploadingPass}
+                disabled={uploading || !uploadFor}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) handleBoardingPassUpload(file);
                 }}
               />
             </label>
+          </div>
+
+          {uploadError && (
+            <div className="mt-1.5 text-[11px] text-destructive">{uploadError}</div>
           )}
         </div>
-      )}
-
-      {uploadError && (
-        <div className="mt-2 text-[11px] text-destructive">{uploadError}</div>
       )}
 
       {viewerDoc && (
