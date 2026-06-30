@@ -1,11 +1,10 @@
 import { useState } from "react";
-import type { Flight } from "@/lib/dashboard-api";
+import type { Flight, Document } from "@/lib/dashboard-api";
 import { FlightCard } from "./FlightCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
+import { getRelativeDateLabel } from "@/lib/date-utils";
 import { Users, ChevronDown } from "lucide-react";
-import type { Document } from "@/lib/dashboard-api";
-
 import { cn } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -138,20 +137,39 @@ export function FlightsList({
           }
         />
       ) : (
-        <div className="flex flex-col gap-3">
-          {ordered.map((f) => {
-            const r = f as unknown as Record<string, string>;
-            const isPast = toISO(r.departuredate) < todayYMD;
-            return (
-              <FlightCard
-                key={r.confirmationcode}
-                flight={f}
-                isPast={isPast}
-                documents={documents}
-              />
-            );
-          })}
-        </div>
+        <>
+          {upcoming.length > 0 && (
+            <div className="mb-5 flex flex-col gap-3">
+              {upcoming.map((f) => {
+                const r = f as unknown as Record<string, string>;
+                return (
+                  <div key={r.confirmationcode}>
+                    <div className="mb-1 px-1 text-xs font-semibold text-accent">
+                      {getRelativeDateLabel(r.departuredate)}
+                    </div>
+                    <FlightCard flight={f} documents={documents} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {past.length > 0 && (
+            <div>
+              <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Past
+              </div>
+              <div className="flex flex-col gap-3">
+                {past.map((f) => {
+                  const r = f as unknown as Record<string, string>;
+                  return (
+                    <FlightCard key={r.confirmationcode} flight={f} isPast documents={documents} />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

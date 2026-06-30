@@ -2,6 +2,7 @@ import { useState } from "react";
 import { TrainCard, type Train } from "./TrainCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
+import { getRelativeDateLabel } from "@/lib/date-utils";
 import { Users, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -112,14 +113,33 @@ export function TrainsList({
           }
         />
       ) : (
-        <div className="flex flex-col gap-3">
-          {ordered.map((t, i) => {
-            const isPast = toISO(t.departuredate) < todayYMD;
-            return (
-              <TrainCard key={t.pnr || `${t.trainnumber}-${i}`} train={t} isPast={isPast} />
-            );
-          })}
-        </div>
+        <>
+          {upcoming.length > 0 && (
+            <div className="mb-5 flex flex-col gap-3">
+              {upcoming.map((t, i) => (
+                <div key={t.pnr || `${t.trainnumber}-${i}`}>
+                  <div className="mb-1 px-1 text-xs font-semibold text-accent">
+                    {getRelativeDateLabel(t.departuredate)}
+                  </div>
+                  <TrainCard train={t} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {past.length > 0 && (
+            <div>
+              <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Past
+              </div>
+              <div className="flex flex-col gap-3">
+                {past.map((t, i) => (
+                  <TrainCard key={t.pnr || `${t.trainnumber}-${i}`} train={t} isPast />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

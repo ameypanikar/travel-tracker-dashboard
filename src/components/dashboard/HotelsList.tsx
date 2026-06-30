@@ -1,10 +1,10 @@
 import { useState } from "react";
-import type { Hotel } from "@/lib/dashboard-api";
+import type { Hotel, Document } from "@/lib/dashboard-api";
 import { HotelCard } from "./HotelCard";
 import { EmptyState } from "./EmptyState";
 import { filterByRole } from "@/lib/role-filter";
+import { getRelativeDateLabel } from "@/lib/date-utils";
 import { Users, ChevronDown } from "lucide-react";
-import type { Document } from "@/lib/dashboard-api";
 import { cn } from "@/lib/utils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -78,7 +78,6 @@ export function HotelsList({
   };
   upcoming.sort(byCheckinAsc);
   past.sort(byCheckinAsc);
-  const ordered = [...upcoming, ...past];
 
   // ── Room summary ───────────────────────────────────────────────
   const totalRooms = filtered.reduce((sum, h) => {
@@ -176,22 +175,37 @@ export function HotelsList({
         </div>
       </div>
 
-      {ordered.map((h, idx) => {
-        const r = h as unknown as Record<string, string>;
-        const checkout = toISO(r.checkoutdate) || toISO(r.checkindate);
-        const isPast = checkout < todayYMD;
-        return (
-          <HotelCard
-            key={
-              r.confirmationcode ||
-              `${r.hotelname || "hotel"}-${r.checkindate || "?"}-${r.checkoutdate || "?"}-${idx}`
-            }
-            hotel={h}
-            isPast={isPast}
-            documents={documents}
-          />
-        );
-      })}
+      {upcoming.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {upcoming.map((h) => {
+            const r = h as unknown as Record<string, string>;
+            return (
+              <div key={r.confirmationcode}>
+                <div className="mb-1 px-1 text-xs font-semibold text-accent">
+                  {getRelativeDateLabel(r.checkindate)}
+                </div>
+                <HotelCard hotel={h} documents={documents} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {past.length > 0 && (
+        <div>
+          <div className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Past
+          </div>
+          <div className="flex flex-col gap-3">
+            {past.map((h) => {
+              const r = h as unknown as Record<string, string>;
+              return (
+                <HotelCard key={r.confirmationcode} hotel={h} isPast documents={documents} />
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

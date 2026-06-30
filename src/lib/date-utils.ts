@@ -75,3 +75,19 @@ export function formatTime(value?: string | null): string {
   if (m) return `${m[1].padStart(2, "0")}:${m[2]}`;
   return s;
 }
+
+// Returns "Today", "Tomorrow", or the original DD/MM/YYYY string unchanged otherwise.
+// Used for the small date label shown above upcoming cards in list views.
+export function getRelativeDateLabel(ddmmyyyy?: string): string {
+  if (!ddmmyyyy) return "";
+  const d = parseAnyDate(ddmmyyyy);
+  if (!d) return ddmmyyyy;
+
+  const today = startOfDay(new Date());
+  const target = startOfDay(d);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  return ddmmyyyy;
+}

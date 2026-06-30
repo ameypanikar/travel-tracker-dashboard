@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { TravelEvent } from "@/lib/dashboard-api";
 import { appendEvent } from "@/lib/dashboard-api";
+import { getRelativeDateLabel } from "@/lib/date-utils";
 import { CalendarCheck, MapPin, Plus } from "lucide-react";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -30,6 +31,14 @@ const todayYMD = () => {
   const d = new Date();
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+// getRelativeDateLabel expects DD/MM/YYYY, but events store YYYY-MM-DD — convert first.
+function ymdToDdMmYyyy(ymd: string): string {
+  const parts = ymd.split("-");
+  if (parts.length !== 3) return ymd;
+  const [yyyy, mm, dd] = parts;
+  return `${dd}/${mm}/${yyyy}`;
+}
 
 function EventCard({ ev, isPast = false }: { ev: TravelEvent; isPast?: boolean }) {
   return (
@@ -154,7 +163,12 @@ export function EventsList({ events, onRefresh }: Props) {
           </div>
           <div className="flex flex-col gap-3">
             {upcoming.map((ev, i) => (
-              <EventCard key={`upcoming-${ev.eventname}-${ev.startdate}-${i}`} ev={ev} />
+              <div key={`upcoming-${ev.eventname}-${ev.startdate}-${i}`}>
+                <div className="mb-1 px-1 text-xs font-semibold text-accent">
+                  {getRelativeDateLabel(ymdToDdMmYyyy(ev.startdate))}
+                </div>
+                <EventCard ev={ev} />
+              </div>
             ))}
           </div>
         </div>
