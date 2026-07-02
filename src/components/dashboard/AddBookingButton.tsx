@@ -3,9 +3,12 @@ import { Plus, X, Upload, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { fetchGeminiKey, uploadDocument } from "@/lib/dashboard-api";
+import { fetchGeminiKey, fetchGeminiModel, uploadDocument } from "@/lib/dashboard-api";
 
 type Kind = "flight" | "hotel" | "train";
+
+// User type — matches what index.tsx already has from data.users
+type UserEntry = { name: string; username: string; role: string };
 
 const SHEET_URL =
   "https://script.google.com/macros/s/AKfycbxK75KALaxQNwDoxm0NB0mnHARmQtENse7dqyQhpZ1Y2KR31H_wOyWKuG1DjAPPO2VPXQ/exec";
@@ -48,7 +51,70 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function AddBookingButton() {
+// ── Name normalization ────────────────────────────────────────────────────────
+// Gemini extracts names as printed on tickets (e.g. "RAJESH KULKARNI",
+// "KULKARNI RAJESH", "Rajesh Kulkarni"). This normalizes them to whatever
+// canonical full name exists in the User Details sheet.
+function normalizeAssignedTo(raw: string, users: UserEntry[]): string {
+  if (!raw.trim()) return raw;
+
+  const parts = raw.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+  const normalized = parts.map((part) => {
+    const matched = findCanonicalName(part, users);
+    return matched ?? part; // keep original if no match found
+  });
+  return normalized.join(", ");
+}
+
+function findCanonicalName(extracted: string, users: UserEntry[]): string | null {
+  const clean = extracted.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!clean) return null;
+
+  // Try exact match first (case-insensitive)
+  for (const u of users) {
+    if (u.name.toLowerCase() === clean) return u.name;
+  }
+
+  // Try reversed order match (SURNAME FIRSTNAME → FIRSTNAME SURNAME)
+  const words = clean.split(" ");
+  const reversed = words.length >= 2
+    ? `${words.slice(1).join(" ")} ${words[0]}`.trim()
+    : null;
+
+  if (reversed) {
+    for (const u of users) {
+      if (u.name.toLowerCase() === reversed) return u.name;
+    }
+  }
+
+  // Try first-name + initial match:
+  // e.g. "RAJESH KULKARNI" matches "Rajesh Kulkarni" because first word matches
+  // and the first letter of the second word matches the first letter of the
+  // second part of the canonical name.
+  for (const u of users) {
+    const canonicalParts = u.name.toLowerCase().split(" ");
+    const extractedParts = clean.split(" ");
+    if (canonicalParts.length < 2 || extractedParts.length < 2) continue;
+
+    const firstMatch = canonicalParts[0] === extractedParts[0];
+    const lastInitialMatch =
+      canonicalParts[1][0] === extractedParts[1][0];
+
+    if (firstMatch && lastInitialMatch) return u.name;
+
+    // Also try reversed: extracted is SURNAME FIRSTNAME
+    const revFirst = extractedParts[extractedParts.length - 1];
+    const revLast = extractedParts[0];
+    if (canonicalParts[0] === revFirst && canonicalParts[1][0] === revLast[0]) {
+      return u.name;
+    }
+  }
+
+  return null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function AddBookingButton({ users = [] }: { users?: UserEntry[] }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("flight");
   const [loading, setLoading] = useState(false);
@@ -59,22 +125,21 @@ export function AddBookingButton() {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── Document attach state (boarding pass / hotel confirmation) ──────────
+  // Document attach state
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentPassenger, setDocumentPassenger] = useState<string>("");
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docUploadError, setDocUploadError] = useState<string>("");
 
-  // Fetch Gemini key — checks localStorage cache first, falls back to Config sheet (shared across all users)
   const getApiKey = () => localStorage.getItem("gemini_api_key") || "";
 
-  // Pre-fetch the shared key from Config sheet when the dialog opens, so every user
-  // gets it automatically without manual entry.
   useEffect(() => {
-    if (open && !getApiKey()) {
-      fetchGeminiKey().catch(() => {
-        // Silent fail — error surfaces naturally when user tries to upload
-      });
+    if (open) {
+      if (!getApiKey()) {
+        fetchGeminiKey().catch(() => {});
+      }
+      // Pre-fetch model so it's cached for extraction
+      fetchGeminiModel().catch(() => {});
     }
   }, [open]);
 
@@ -96,12 +161,13 @@ export function AddBookingButton() {
   ): Promise<Record<string, string>> => {
     const key = getApiKey();
     if (!key) throw new Error("Gemini API key not set. Use the ⚙️ Settings icon in the top bar to add it.");
+    const model = await fetchGeminiModel();
     const prompt = PROMPTS[k];
 
     let attempt = 0;
     while (attempt < 3) {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -150,12 +216,7 @@ export function AddBookingButton() {
     reset();
     let key = getApiKey();
     if (!key) {
-      // Try fetching from Config sheet one more time before giving up
-      try {
-        key = await fetchGeminiKey();
-      } catch {
-        // ignore, handled below
-      }
+      try { key = await fetchGeminiKey(); } catch { }
     }
     if (!key) {
       setError("Could not load the shared Gemini API key. Please ask your System Manager to set it in Settings.");
@@ -175,6 +236,12 @@ export function AddBookingButton() {
       const keys = KEYS[kind];
       const normalized: Record<string, string> = {};
       for (const k of keys) normalized[k] = String(data[k] ?? "");
+
+      // Normalize assigned_to against the canonical user list
+      if (normalized.assigned_to && users.length > 0) {
+        normalized.assigned_to = normalizeAssignedTo(normalized.assigned_to, users);
+      }
+
       setFields(normalized);
       setStatus("");
     } catch (e) {
@@ -192,8 +259,6 @@ export function AddBookingButton() {
     if (file) handleFile(file);
   };
 
-  // Names extracted into the assigned_to field for this booking — used to build
-  // the "whose boarding pass is this" picker for flights.
   const assignedNames = (fields?.assigned_to || "")
     .split(",")
     .map((s) => s.trim())
@@ -209,9 +274,6 @@ export function AddBookingButton() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "Save failed");
 
-      // Booking saved successfully — now attach the document, if one was provided.
-      // This runs after the save so we always have a confirmed confirmation_code
-      // to tie the document to, and so a document-upload failure never costs the booking.
       if (documentFile && fields.confirmation_code) {
         setUploadingDoc(true);
         setDocUploadError("");
@@ -225,7 +287,7 @@ export function AddBookingButton() {
           });
         } catch (docErr) {
           setDocUploadError(
-            `Booking saved, but the document upload failed: ${(docErr as Error).message}`,
+            `Booking saved, but document upload failed: ${(docErr as Error).message}`,
           );
           setUploadingDoc(false);
           setSaving(false);
@@ -357,7 +419,7 @@ export function AddBookingButton() {
               </div>
             )}
 
-            {/* ── Document attach section (boarding pass / hotel confirmation) ── */}
+            {/* Document attach section */}
             {fields && canAttachDocument && (
               <div className="rounded-lg border p-3">
                 <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">

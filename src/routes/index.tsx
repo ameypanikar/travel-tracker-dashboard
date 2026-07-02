@@ -159,7 +159,7 @@ function Index() {
           Travel Dashboard · live from Google Sheets
         </p>
       </div>
-      <AddBookingButton />
+      <AddBookingButton users={allUsers} />
     </div>
   );
 }

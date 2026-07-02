@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { saveGeminiKey, fetchGeminiKey, WEB_APP_URL } from "@/lib/dashboard-api";
+import { saveGeminiKey, fetchGeminiKey, saveGeminiModel, fetchGeminiModel, WEB_APP_URL } from "@/lib/dashboard-api";
 import type { SessionUser } from "@/lib/auth";
 import { sha256Hex } from "@/lib/auth";
 
@@ -21,37 +21,44 @@ export function SettingsModal({ user, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Hash passwords state
-  const [hashing, setHashing] = useState(false);
-  const [hashResult, setHashResult] = useState<string | null>(null);
-
-  // Gemini key — fetched from the shared Config sheet on mount, not just localStorage.
-  // This is what fixes the "asks me to re-enter on a new device" bug: previously this
-  // modal only read the local cache and never checked the sheet itself.
+  // Gemini key state
   const [currentKey, setCurrentKey] = useState<string>("");
   const [keyLoading, setKeyLoading] = useState(true);
   const [keyLoadError, setKeyLoadError] = useState<string | null>(null);
 
+  // Gemini model state
+  const [currentModel, setCurrentModel] = useState<string>("");
+  const [modelLoading, setModelLoading] = useState(true);
+  const [editingModel, setEditingModel] = useState(false);
+  const [newModel, setNewModel] = useState("");
+  const [savingModel, setSavingModel] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [modelSuccess, setModelSuccess] = useState(false);
+
+  // Hash passwords state
+  const [hashing, setHashing] = useState(false);
+  const [hashResult, setHashResult] = useState<string | null>(null);
+
+  // Fetch key and model from Config sheet on mount
   useEffect(() => {
     let cancelled = false;
+
     setKeyLoading(true);
-    setKeyLoadError(null);
     fetchGeminiKey()
-      .then((key) => {
-        if (!cancelled) setCurrentKey(key);
-      })
-      .catch((err) => {
-        if (!cancelled) setKeyLoadError((err as Error).message);
-      })
-      .finally(() => {
-        if (!cancelled) setKeyLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then((key) => { if (!cancelled) setCurrentKey(key); })
+      .catch((err) => { if (!cancelled) setKeyLoadError((err as Error).message); })
+      .finally(() => { if (!cancelled) setKeyLoading(false); });
+
+    setModelLoading(true);
+    fetchGeminiModel()
+      .then((model) => { if (!cancelled) setCurrentModel(model); })
+      .catch(() => { if (!cancelled) setCurrentModel("gemini-3.1-flash-lite"); })
+      .finally(() => { if (!cancelled) setModelLoading(false); });
+
+    return () => { cancelled = true; };
   }, []);
 
-  async function handleSave(e: React.FormEvent) {
+  async function handleSaveKey(e: React.FormEvent) {
     e.preventDefault();
     if (!newKey.trim()) { setError("Key cannot be empty"); return; }
     setSaving(true); setError(null);
@@ -68,17 +75,32 @@ export function SettingsModal({ user, onClose }: Props) {
     }
   }
 
+  async function handleSaveModel(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newModel.trim()) { setModelError("Model name cannot be empty"); return; }
+    setSavingModel(true); setModelError(null);
+    try {
+      await saveGeminiModel(newModel.trim());
+      setCurrentModel(newModel.trim());
+      setModelSuccess(true);
+      setEditingModel(false);
+      setNewModel("");
+    } catch (err) {
+      setModelError((err as Error).message);
+    } finally {
+      setSavingModel(false);
+    }
+  }
+
   async function handleHashPasswords() {
     setHashing(true);
     setHashResult(null);
     try {
-      // Fetch all users
       const res = await fetch(`${WEB_APP_URL}?action=getUsers`, { redirect: "follow" });
       const json = await res.json();
       const users: { name: string; username: string; password: string; role: string }[] =
         json.users ?? [];
 
-      // Filter only plain-text (non-hashed) passwords
       const toHash = users.filter(
         (u) => u.password && !/^[a-f0-9]{64}$/.test(u.password),
       );
@@ -89,7 +111,6 @@ export function SettingsModal({ user, onClose }: Props) {
         return;
       }
 
-      // Hash and update each one
       let count = 0;
       for (const u of toHash) {
         const hashed = await sha256Hex(u.password);
@@ -117,7 +138,7 @@ export function SettingsModal({ user, onClose }: Props) {
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
         </div>
 
-        {/* Gemini API Key */}
+        {/* ── Gemini API Key ── */}
         <div className="mb-4">
           <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Gemini API Key
@@ -142,7 +163,7 @@ export function SettingsModal({ user, onClose }: Props) {
                 Update API Key
               </button>
             ) : (
-              <form onSubmit={handleSave} className="mb-5">
+              <form onSubmit={handleSaveKey} className="mb-5">
                 <input
                   type="text"
                   placeholder="Paste new Gemini API key"
@@ -170,7 +191,59 @@ export function SettingsModal({ user, onClose }: Props) {
               </form>
             )}
 
-            {/* Hash passwords section */}
+            {/* ── Gemini Model ── */}
+            <div className="mb-5 border-t border-border pt-4">
+              <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Gemini Model
+              </p>
+              {modelLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : (
+                <p className="font-mono text-sm text-foreground">{currentModel}</p>
+              )}
+              {modelSuccess && <p className="mt-1 text-xs text-green-600">Model saved successfully!</p>}
+
+              {!editingModel ? (
+                <button
+                  onClick={() => { setEditingModel(true); setModelSuccess(false); setNewModel(currentModel); }}
+                  className="mt-2 w-full rounded-lg border border-accent px-4 py-2 text-sm font-semibold text-accent hover:bg-accent-soft"
+                >
+                  Update Model
+                </button>
+              ) : (
+                <form onSubmit={handleSaveModel} className="mt-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. gemini-3.1-flash-lite"
+                    value={newModel}
+                    onChange={(e) => setNewModel(e.target.value)}
+                    className="mb-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-accent/40"
+                  />
+                  <p className="mb-2 text-[11px] text-muted-foreground">
+                    Enter the exact Gemini model string. Default fallback: gemini-3.1-flash-lite
+                  </p>
+                  {modelError && <p className="mb-2 text-xs text-destructive">{modelError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingModel(false); setNewModel(""); setModelError(null); }}
+                      className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingModel}
+                      className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-60"
+                    >
+                      {savingModel ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* ── Security ── */}
             <div className="border-t border-border pt-4">
               <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Security

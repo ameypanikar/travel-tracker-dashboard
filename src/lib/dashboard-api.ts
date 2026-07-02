@@ -108,6 +108,42 @@ export async function fetchGeminiKey(): Promise<string> {
   return key;
 }
 
+const GEMINI_MODEL_CACHE_KEY = "gemini_model";
+const GEMINI_MODEL_FALLBACK = "gemini-3.1-flash-lite";
+
+export async function fetchGeminiModel(): Promise<string> {
+  const cached = localStorage.getItem(GEMINI_MODEL_CACHE_KEY);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(`${WEB_APP_URL}?action=getConfig&key=gemini_model`, {
+      redirect: "follow",
+    });
+    if (!res.ok) return GEMINI_MODEL_FALLBACK;
+    const json = await res.json();
+    const model = json.value || GEMINI_MODEL_FALLBACK;
+    localStorage.setItem(GEMINI_MODEL_CACHE_KEY, model);
+    return model;
+  } catch {
+    return GEMINI_MODEL_FALLBACK;
+  }
+}
+
+export async function saveGeminiModel(newModel: string): Promise<void> {
+  const url = `${WEB_APP_URL}?action=setConfig&payload=${encodeURIComponent(
+    JSON.stringify({ key: "gemini_model", value: newModel }),
+  )}`;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error("Could not save model");
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "Failed to save");
+  localStorage.setItem(GEMINI_MODEL_CACHE_KEY, newModel);
+}
+
+export function getCachedGeminiModel(): string {
+  return localStorage.getItem(GEMINI_MODEL_CACHE_KEY) || GEMINI_MODEL_FALLBACK;
+}
+
 export async function saveGeminiKey(newKey: string): Promise<void> {
   const url = `${WEB_APP_URL}?action=setConfig&payload=${encodeURIComponent(
     JSON.stringify({ key: "gemini_api_key", value: newKey }),
